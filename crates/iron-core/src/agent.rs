@@ -310,6 +310,9 @@ impl Agent {
                     }
                 };
 
+                // Layer 1+2: Truncate oversized tool results.
+                let result_text = truncate_tool_result(&result_text, &tc.function.name, &tc.id);
+
                 session.messages.push(Message {
                     role: "tool".to_string(),
                     content: Some(result_text),
@@ -610,6 +613,45 @@ fn filter_tag_content(delta: &str, open_tag: &str, close_tag: &str, inside: &mut
     }
 
     result
+}
+
+// ─── Tool result size control (Layer 1 + Layer 2) ───
+
+/// Maximum tool result size in characters (Layer 1).
+const MAX_TOOL_RESULT_CHARS: usize = 4_000;
+
+/// Preview size for truncated results (Layer 2).
+const TOOL_RESULT_PREVIEW_CHARS: usize = 1_500;
+
+/// Truncate a tool result if it exceeds the per-tool limit.
+///
+/// Layer 1: Check against MAX_TOOL_RESULT_CHARS.
+/// Layer 2: If exceeded, return a preview (first TOOL_RESULT_PREVIEW_CHARS) with
+/// a truncation notice, so the LLM knows the result was shortened.
+fn truncate_tool_result(result: &str, tool_name: &str, tool_call_id: &str) -> String {
+    if result.len() <= MAX_TOOL_RESULT_CHARS {
+        return result.to_string();
+    }
+
+    let total_bytes = result.len();
+    let total_kb = total_bytes / 1024;
+
+    // Take the preview, truncating at the last newline to avoid broken JSON/text.
+    let preview_end = result[..TOOL_RESULT_PREVIEW_CHARS]
+        .rfind('\n')
+        .unwrap_or(TOOL_RESULT_PREVIEW_CHARS);
+    let preview = &result[..preview_end];
+
+    warn!(
+        "Tool result from '{}' (call {}) truncated: {} KB -> {} char preview",
+        tool_name, tool_call_id, total_kb, preview_end
+    );
+
+    format!(
+        "{preview}\n\n[... Result truncated: {total_kb} KB total. \
+         Showing first {preview_end} chars. Use read_file or web_extract \
+         for targeted retrieval if you need more detail.]"
+    )
 }
 
 /// Convert days since Unix epoch to (year, month, day).
