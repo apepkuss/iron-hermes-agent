@@ -20,7 +20,7 @@ fn test_build_with_defaults() {
 
     // Default identity must be present
     assert!(
-        output.contains("helpful AI assistant"),
+        output.contains("Iron Hermes"),
         "Expected default identity in output"
     );
 
