@@ -12,7 +12,7 @@ use tracing::info;
 use config::ServerConfig;
 use routes::chat::chat_completions;
 use routes::health::health;
-use routes::models::list_models;
+use routes::models::{list_models, list_provider_models};
 use routes::static_files;
 use state::build_app_state;
 
@@ -35,6 +35,7 @@ async fn main() {
         .route("/assets/{*path}", get(static_files::static_file))
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
+        .route("/v1/provider/models", get(list_provider_models))
         .route("/v1/chat/completions", post(chat_completions))
         .with_state(state);
 

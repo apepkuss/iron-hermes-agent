@@ -19,6 +19,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 axum = { workspace = true }
 uuid = { workspace = true }
+reqwest.workspace = true
 dirs = "6"
 futures-util = "0.3"
 async-stream = "0.3"

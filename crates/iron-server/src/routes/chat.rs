@@ -60,12 +60,14 @@ pub async fn chat_completions(
     }
 }
 
-/// Build an `LlmClient` from the server config.
-fn make_llm_client(state: &AppState) -> LlmClient {
+/// Build an `LlmClient` from the server config, optionally overriding the model.
+fn make_llm_client(state: &AppState, model_override: Option<&str>) -> LlmClient {
     LlmClient::new(LlmConfig {
         base_url: state.config.llm_base_url.clone(),
         api_key: state.config.llm_api_key.clone(),
-        model: state.config.llm_model.clone(),
+        model: model_override
+            .unwrap_or(&state.config.llm_model)
+            .to_string(),
         temperature: None,
         max_tokens: None,
     })
@@ -105,7 +107,7 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
         }
     };
 
-    let llm_client = make_llm_client(&state);
+    let llm_client = make_llm_client(&state, payload.model.as_deref());
     let memory_manager = state.memory_manager.lock().await;
     let agent_config = AgentConfig {
         model_name: state.config.model_name.clone(),
@@ -192,6 +194,7 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
     let resp_id = format!("chatcmpl-{}", Uuid::new_v4());
     let model_name = state.config.model_name.clone();
+    let model_override = payload.model.clone();
 
     // Channel for streaming deltas from the agent callback to the SSE response.
     let (tx, mut rx) = mpsc::channel::<String>(256);
@@ -200,7 +203,7 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
     // Spawn the agent loop in a background task.
     tokio::spawn(async move {
-        let llm_client = make_llm_client(&state);
+        let llm_client = make_llm_client(&state, model_override.as_deref());
 
         let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
         let base = home.join(".iron-hermes");

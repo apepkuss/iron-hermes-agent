@@ -64,6 +64,38 @@ html, body {
   border: none;
 }
 
+.model-selector {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.model-selector label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.model-selector select {
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  background: var(--white);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+}
+
+.model-selector select:focus {
+  border-color: var(--text);
+}
+
 /* ── Chat area ── */
 .chat-area {
   flex: 1;
@@ -342,6 +374,10 @@ html, body {
   <header class="header">
     <h1>IRON HERMES</h1>
     <hr class="header-rule">
+    <div class="model-selector">
+      <label for="modelSelect">MODEL</label>
+      <select id="modelSelect"><option value="">loading...</option></select>
+    </div>
   </header>
 
   <div class="chat-area" id="chatArea">
@@ -369,10 +405,34 @@ html, body {
   const emptyState = document.getElementById('emptyState');
   const msgInput = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
+  const modelSelect = document.getElementById('modelSelect');
 
   let messages = [];
   let isStreaming = false;
   let abortController = null;
+
+  // ── Fetch provider models ──
+  async function loadModels() {
+    try {
+      const resp = await fetch('/v1/provider/models');
+      if (!resp.ok) throw new Error('Failed to fetch models');
+      const data = await resp.json();
+      const models = (data.data || []).map(m => m.id);
+      modelSelect.innerHTML = '';
+      models.forEach(function(id) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = id;
+        modelSelect.appendChild(opt);
+      });
+      if (models.length === 0) {
+        modelSelect.innerHTML = '<option value="">no models</option>';
+      }
+    } catch (e) {
+      modelSelect.innerHTML = '<option value="">unavailable</option>';
+    }
+  }
+  loadModels();
 
   // ── Auto-grow textarea ──
   function autoGrow() {
@@ -523,6 +583,7 @@ html, body {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messages,
+          model: modelSelect.value || undefined,
           stream: true
         }),
         signal: abortController.signal
