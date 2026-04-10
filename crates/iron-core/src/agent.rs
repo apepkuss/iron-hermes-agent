@@ -434,12 +434,6 @@ impl Agent {
         let mut tc_state: std::collections::HashMap<u32, (String, String, String, String)> =
             std::collections::HashMap::new();
 
-        // Buffer for accumulating raw content before tag filtering.
-        // We filter on the accumulated buffer rather than per-delta,
-        // because tags can be split across chunk boundaries.
-        let mut raw_content_buf = String::new();
-        let mut last_sent_len: usize = 0;
-
         // Timeout for the entire streaming response (5 minutes).
         let stream_timeout = std::time::Duration::from_secs(300);
         let stream_deadline = tokio::time::Instant::now() + stream_timeout;
@@ -477,23 +471,11 @@ impl Agent {
                 }
 
                 if let Some(ref delta_content) = choice.delta.content {
-                    raw_content_buf.push_str(delta_content);
-
-                    // Filter tags on the accumulated buffer, then send
-                    // only the new portion that is safe (not inside a tag).
-                    let filtered_all = strip_tags(&raw_content_buf);
-
-                    // Don't send content that might be inside an unclosed tag
-                    // at the tail. Hold back if we see a partial opening tag.
-                    let safe_len = safe_send_length(&filtered_all, &raw_content_buf);
-
-                    if safe_len > last_sent_len {
-                        let new_text = &filtered_all[last_sent_len..safe_len];
-                        content.push_str(new_text);
-                        if let Some(cb) = stream_callback {
-                            cb(new_text);
-                        }
-                        last_sent_len = safe_len;
+                    content.push_str(delta_content);
+                    if !delta_content.is_empty()
+                        && let Some(cb) = stream_callback
+                    {
+                        cb(delta_content);
                     }
                 }
 
@@ -520,20 +502,6 @@ impl Agent {
                     }
                 }
             }
-        }
-
-        // Flush any remaining filtered content after stream ends.
-        {
-            let filtered_all = strip_tags(&raw_content_buf);
-            if filtered_all.len() > last_sent_len {
-                let remaining_text = &filtered_all[last_sent_len..];
-                content.push_str(remaining_text);
-                if let Some(cb) = stream_callback {
-                    cb(remaining_text);
-                }
-            }
-            // Use full filtered content for the response.
-            content = strip_tags(&raw_content_buf);
         }
 
         // Assemble tool calls from state.
@@ -601,61 +569,6 @@ fn chrono_today() -> String {
     let days = secs / 86400;
     let (y, m, d) = epoch_days_to_ymd(days as i64);
     format!("{y:04}-{m:02}-{d:02}")
-}
-
-/// Tags to strip from streamed content.
-const FILTERED_TAGS: &[(&str, &str)] = &[("<think>", "</think>"), ("<tool_call>", "</tool_call>")];
-
-/// Strip all matched tag pairs from accumulated content.
-///
-/// Operates on the full buffer so that tags split across chunk boundaries
-/// are handled correctly.
-fn strip_tags(text: &str) -> String {
-    let mut result = text.to_string();
-    for &(open, close) in FILTERED_TAGS {
-        while let Some(start) = result.find(open) {
-            if let Some(end) = result[start..].find(close) {
-                let remove_end = start + end + close.len();
-                result = format!("{}{}", &result[..start], &result[remove_end..]);
-            } else {
-                // Unclosed tag — remove from open tag to end (will be re-evaluated
-                // as more content arrives via the safe_send_length guard).
-                result.truncate(start);
-                break;
-            }
-        }
-    }
-    result
-}
-
-/// Determine how much of the filtered content is safe to send.
-///
-/// If the raw buffer ends with a partial tag opening (e.g. `<thi`), hold back
-/// to avoid sending text that might be part of a tag we haven't fully received.
-fn safe_send_length(filtered: &str, raw: &str) -> usize {
-    // Check if raw content has any unclosed filtered tag opening.
-    for &(open, close) in FILTERED_TAGS {
-        // Find last occurrence of open tag in raw
-        if let Some(last_open) = raw.rfind(open) {
-            // Check if there's a matching close after it
-            if raw[last_open..].find(close).is_none() {
-                // Unclosed tag — strip_tags already removed it from filtered,
-                // so filtered length is correct (content before the tag).
-                return filtered.len();
-            }
-        }
-        // Also check for partial opening tags at the tail of raw
-        // e.g. raw ends with "<thi" which could become "<think>"
-        for partial_len in 1..open.len() {
-            if raw.ends_with(&open[..partial_len]) {
-                // Might be a partial tag — hold back content after this point.
-                // But since strip_tags doesn't see the partial, filtered is fine.
-                // We just don't want to send content that's right before a potential tag.
-                return filtered.len();
-            }
-        }
-    }
-    filtered.len()
 }
 
 // ─── Tool result size control (Layer 1 + Layer 2) ───
