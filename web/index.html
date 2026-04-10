@@ -372,6 +372,7 @@ html, body {
 
   let messages = [];
   let isStreaming = false;
+  let abortController = null;
 
   // ── Auto-grow textarea ──
   function autoGrow() {
@@ -387,7 +388,19 @@ html, body {
       send();
     }
   });
-  sendBtn.addEventListener('click', send);
+  sendBtn.addEventListener('click', function() {
+    if (isStreaming) {
+      stopStreaming();
+    } else {
+      send();
+    }
+  });
+
+  function stopStreaming() {
+    if (abortController) {
+      abortController.abort();
+    }
+  }
 
   // ── Markdown rendering ──
   function renderMarkdown(text) {
@@ -472,8 +485,17 @@ html, body {
   function setStreaming(val) {
     isStreaming = val;
     msgInput.disabled = val;
-    sendBtn.disabled = val;
-    if (!val) msgInput.focus();
+    if (val) {
+      sendBtn.innerHTML = '&#9632;'; // ■ stop icon
+      sendBtn.title = 'Stop';
+      sendBtn.disabled = false;
+    } else {
+      sendBtn.innerHTML = '&#8594;'; // → send icon
+      sendBtn.title = 'Send';
+      sendBtn.disabled = false;
+      abortController = null;
+      msgInput.focus();
+    }
   }
 
   // ── Send message ──
@@ -492,15 +514,18 @@ html, body {
     const assistantDiv = loadingContent.parentElement;
 
     setStreaming(true);
+    let fullText = '';
 
     try {
+      abortController = new AbortController();
       const response = await fetch('/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: messages,
           stream: true
-        })
+        }),
+        signal: abortController.signal
       });
 
       if (!response.ok) {
@@ -510,7 +535,7 @@ html, body {
         return;
       }
 
-      let fullText = '';
+      fullText = '';
       loadingContent.innerHTML = '';
 
       const reader = response.body.getReader();
@@ -555,7 +580,17 @@ html, body {
       }
 
     } catch (err) {
-      loadingContent.innerHTML = '<p style="color:var(--accent)">Connection error: ' + escapeHtml(err.message) + '</p>';
+      if (err.name === 'AbortError') {
+        // User clicked stop — keep whatever was streamed so far
+        if (fullText) {
+          loadingContent.innerHTML = renderMarkdown(fullText);
+          messages.push({ role: 'assistant', content: fullText });
+        } else {
+          loadingContent.innerHTML = '<p style="color:#999">Stopped.</p>';
+        }
+      } else {
+        loadingContent.innerHTML = '<p style="color:var(--accent)">Connection error: ' + escapeHtml(err.message) + '</p>';
+      }
     }
 
     setStreaming(false);
