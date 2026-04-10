@@ -78,17 +78,9 @@ fn register_terminal_tool(registry: &mut ToolRegistry) {
 
         let tool = Arc::clone(&tool);
 
-        let result = match tokio::runtime::Handle::try_current() {
-            Ok(handle) => handle.block_on(tool.execute(params)),
-            Err(_) => {
-                let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                    ToolError::ExecutionFailed(format!("failed to create tokio runtime: {e}"))
-                })?;
-                rt.block_on(tool.execute(params))
-            }
-        };
-
-        let res = result?;
+        let res = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(tool.execute(params))
+        })?;
 
         Ok(ToolResult::ok(json!({
             "stdout": res.stdout,
@@ -381,17 +373,9 @@ fn register_web_tools(registry: &mut ToolRegistry) {
 
                 let client = Arc::clone(&client);
 
-                let results = match tokio::runtime::Handle::try_current() {
-                    Ok(handle) => handle.block_on(client.search(&query)),
-                    Err(_) => {
-                        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                            ToolError::ExecutionFailed(format!(
-                                "failed to create tokio runtime: {e}"
-                            ))
-                        })?;
-                        rt.block_on(client.search(&query))
-                    }
-                }?;
+                let results = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(client.search(&query))
+                })?;
 
                 Ok(ToolResult::ok(crate::web::format_search_results(&results)))
             },
@@ -435,17 +419,9 @@ fn register_web_tools(registry: &mut ToolRegistry) {
 
                 let client = Arc::clone(&client);
 
-                let items = match tokio::runtime::Handle::try_current() {
-                    Ok(handle) => handle.block_on(client.extract(&urls)),
-                    Err(_) => {
-                        let rt = tokio::runtime::Runtime::new().map_err(|e| {
-                            ToolError::ExecutionFailed(format!(
-                                "failed to create tokio runtime: {e}"
-                            ))
-                        })?;
-                        rt.block_on(client.extract(&urls))
-                    }
-                }?;
+                let items = tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(client.extract(&urls))
+                })?;
 
                 let results: Vec<Value> = items
                     .into_iter()
