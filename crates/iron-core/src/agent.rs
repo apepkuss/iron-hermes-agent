@@ -574,7 +574,7 @@ fn chrono_today() -> String {
 // ─── Tool result size control (Layer 1 + Layer 2) ───
 
 /// Maximum tool result size in characters (Layer 1).
-const MAX_TOOL_RESULT_CHARS: usize = 4_000;
+const MAX_TOOL_RESULT_CHARS: usize = 100_000;
 
 /// Preview size for truncated results (Layer 2).
 const TOOL_RESULT_PREVIEW_CHARS: usize = 1_500;
