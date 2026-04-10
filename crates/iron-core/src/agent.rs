@@ -232,13 +232,11 @@ impl Agent {
             let tool_calls = choice.message.tool_calls.clone();
 
             // Build the assistant message for session history.
+            // Always include content (even empty string) — some LLM providers
+            // reject messages with missing content field.
             let assistant_msg = Message {
                 role: "assistant".to_string(),
-                content: if assistant_content.is_empty() {
-                    None
-                } else {
-                    Some(assistant_content.clone())
-                },
+                content: Some(assistant_content.clone()),
                 tool_calls: tool_calls.clone(),
                 tool_call_id: None,
                 name: None,
