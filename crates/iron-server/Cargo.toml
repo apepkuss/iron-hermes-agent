@@ -1,0 +1,25 @@
+[package]
+name = "iron-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+iron-core = { path = "../iron-core" }
+iron-tools = { path = "../iron-tools" }
+iron-memory = { path = "../iron-memory" }
+iron-skills = { path = "../iron-skills" }
+iron-sandbox = { path = "../iron-sandbox" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+axum = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+reqwest = { workspace = true }
