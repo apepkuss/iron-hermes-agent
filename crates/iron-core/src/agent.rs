@@ -433,8 +433,9 @@ impl Agent {
         let mut tc_state: std::collections::HashMap<u32, (String, String, String, String)> =
             std::collections::HashMap::new();
 
-        // Track whether we're inside a <think> block (Qwen3 thinking mode).
+        // Track whether we're inside filtered blocks (Qwen3 thinking / tool_call text).
         let mut inside_think = false;
+        let mut inside_tool_call = false;
 
         // Timeout for the entire streaming response (5 minutes).
         let stream_timeout = std::time::Duration::from_secs(300);
@@ -473,8 +474,15 @@ impl Agent {
                 }
 
                 if let Some(ref delta_content) = choice.delta.content {
-                    // Filter out <think> blocks — Qwen3 thinking mode.
-                    let filtered = filter_think_tags(delta_content, &mut inside_think);
+                    // Filter out <think> and <tool_call> blocks from display.
+                    let after_think =
+                        filter_tag_content(delta_content, "<think>", "</think>", &mut inside_think);
+                    let filtered = filter_tag_content(
+                        &after_think,
+                        "<tool_call>",
+                        "</tool_call>",
+                        &mut inside_tool_call,
+                    );
                     content.push_str(&filtered);
                     if !filtered.is_empty()
                         && let Some(cb) = stream_callback
@@ -575,35 +583,31 @@ fn chrono_today() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-/// Filter out `<think>...</think>` blocks from streaming delta content.
+/// Filter out content between matching open/close tags from streaming deltas.
 ///
-/// Qwen3 models emit thinking tokens wrapped in `<think>` tags inside the
-/// content field. These should not be forwarded to the user. Because deltas
-/// arrive as small fragments, we track state across calls via `inside_think`.
-fn filter_think_tags(delta: &str, inside_think: &mut bool) -> String {
+/// Used to strip `<think>...</think>` (Qwen3 thinking) and
+/// `<tool_call>...</tool_call>` (Qwen3 text-mode tool calls) from content
+/// before forwarding to the user. Because deltas arrive as small fragments,
+/// we track state across calls via `inside`.
+fn filter_tag_content(delta: &str, open_tag: &str, close_tag: &str, inside: &mut bool) -> String {
     let mut result = String::new();
     let mut remaining = delta;
 
     while !remaining.is_empty() {
-        if *inside_think {
-            // Look for closing </think>
-            if let Some(pos) = remaining.find("</think>") {
-                *inside_think = false;
-                remaining = &remaining[pos + 8..];
+        if *inside {
+            if let Some(pos) = remaining.find(close_tag) {
+                *inside = false;
+                remaining = &remaining[pos + close_tag.len()..];
             } else {
-                // Entire delta is inside think block — discard
-                break;
+                break; // entire delta is inside filtered block
             }
+        } else if let Some(pos) = remaining.find(open_tag) {
+            result.push_str(&remaining[..pos]);
+            *inside = true;
+            remaining = &remaining[pos + open_tag.len()..];
         } else {
-            // Look for opening <think>
-            if let Some(pos) = remaining.find("<think>") {
-                result.push_str(&remaining[..pos]);
-                *inside_think = true;
-                remaining = &remaining[pos + 7..];
-            } else {
-                result.push_str(remaining);
-                break;
-            }
+            result.push_str(remaining);
+            break;
         }
     }
 

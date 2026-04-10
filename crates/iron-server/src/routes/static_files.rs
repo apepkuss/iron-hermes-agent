@@ -1,5 +1,5 @@
 use axum::http::{StatusCode, header};
-use axum::response::{Html, IntoResponse};
+use axum::response::IntoResponse;
 use rust_embed::Embed;
 
 #[derive(Embed)]
@@ -8,9 +8,17 @@ struct Asset;
 
 pub async fn index() -> impl IntoResponse {
     match Asset::get("index.html") {
-        Some(content) => {
-            Html(String::from_utf8_lossy(content.data.as_ref()).to_string()).into_response()
-        }
+        Some(content) => (
+            [
+                (
+                    header::CACHE_CONTROL,
+                    "no-cache, no-store, must-revalidate".to_string(),
+                ),
+                (header::CONTENT_TYPE, "text/html; charset=utf-8".to_string()),
+            ],
+            String::from_utf8_lossy(content.data.as_ref()).to_string(),
+        )
+            .into_response(),
         None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }
 }
