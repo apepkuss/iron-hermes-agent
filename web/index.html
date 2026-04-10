@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRON HERMES</title>
+<style>
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg: #FAFAFA;
+  --text: #1A1A1A;
+  --white: #FFFFFF;
+  --accent: #C84B31;
+  --border: #E0E0E0;
+  --input-border: #CCCCCC;
+  --code-bg: #F0F0F0;
+  --font: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', 'Consolas', monospace;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ── Header ── */
+.header {
+  padding: 28px 24px 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 14px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.header-rule {
+  width: 48px;
+  height: 2px;
+  background: var(--text);
+  margin: 12px auto 0;
+  border: none;
+}
+
+/* ── Chat area ── */
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 24px;
+  scroll-behavior: smooth;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 20px;
+  opacity: 0.6;
+  user-select: none;
+}
+
+.empty-logo {
+  width: 64px;
+  height: 64px;
+  position: relative;
+}
+
+.empty-logo .geo-circle {
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--text);
+  border-radius: 50%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.empty-logo .geo-square {
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--text);
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  transform: rotate(45deg);
+}
+
+.empty-title {
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.empty-tagline {
+  font-size: 12px;
+  font-weight: 300;
+  letter-spacing: 0.1em;
+  color: #999;
+}
+
+/* ── Messages ── */
+.message {
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  max-width: 100%;
+  animation: msgIn 0.2s ease-out;
+}
+
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.message-user {
+  background: var(--text);
+  color: var(--white);
+  border-radius: 2px;
+}
+
+.message-assistant {
+  background: var(--white);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+.message-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  opacity: 0.5;
+}
+
+.message-user .message-label {
+  color: var(--white);
+}
+
+.message-content {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.message-content p {
+  margin-bottom: 8px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.message-content strong {
+  font-weight: 600;
+}
+
+.message-content code {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--code-bg);
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+
+.message-user .message-content code {
+  background: rgba(255,255,255,0.15);
+}
+
+.message-content pre {
+  background: #1A1A1A;
+  color: #E0E0E0;
+  padding: 14px 16px;
+  margin: 10px 0;
+  overflow-x: auto;
+  border-radius: 2px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.message-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: inherit;
+}
+
+.message-user .message-content pre {
+  background: rgba(255,255,255,0.1);
+  color: #E0E0E0;
+}
+
+/* ── Loading indicator ── */
+.loading-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) { animation-delay: 0.2s; }
+.loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Input area ── */
+.input-area {
+  flex-shrink: 0;
+  padding: 16px 24px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.input-row textarea {
+  flex: 1;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  background: var(--white);
+  color: var(--text);
+  resize: none;
+  outline: none;
+  min-height: 44px;
+  max-height: 160px;
+  overflow-y: auto;
+  transition: border-color 0.15s ease;
+}
+
+.input-row textarea:focus {
+  border-color: var(--text);
+}
+
+.input-row textarea::placeholder {
+  color: #AAAAAA;
+}
+
+.input-row textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.send-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--accent);
+  color: var(--white);
+  border: none;
+  border-radius: 2px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+.send-btn:hover {
+  opacity: 0.85;
+}
+
+.send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .app {
+    max-width: 100%;
+  }
+  .header {
+    padding: 20px 16px 16px;
+  }
+  .chat-area {
+    padding: 0 16px 16px;
+  }
+  .input-area {
+    padding: 12px 16px 16px;
+  }
+}
+
+/* ── Scrollbar ── */
+.chat-area::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-area::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <h1>IRON HERMES</h1>
+    <hr class="header-rule">
+  </header>
+
+  <div class="chat-area" id="chatArea">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-logo">
+        <div class="geo-circle"></div>
+        <div class="geo-square"></div>
+      </div>
+      <div class="empty-title">IRON HERMES</div>
+      <div class="empty-tagline">Intelligent Agent Framework</div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="msgInput" placeholder="Message..." rows="1"></textarea>
+      <button class="send-btn" id="sendBtn" title="Send">&#8594;</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const chatArea = document.getElementById('chatArea');
+  const emptyState = document.getElementById('emptyState');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+
+  let messages = [];
+  let isStreaming = false;
+
+  // ── Auto-grow textarea ──
+  function autoGrow() {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 160) + 'px';
+  }
+  msgInput.addEventListener('input', autoGrow);
+
+  // ── Key handling ──
+  msgInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+  sendBtn.addEventListener('click', send);
+
+  // ── Markdown rendering ──
+  function renderMarkdown(text) {
+    // Escape HTML
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    // Code blocks: ```lang\n...\n```
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+      return '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>';
+    });
+
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Bold
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+    // Italic
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+    // Split into blocks by double newline for paragraphs, but preserve pre blocks
+    const parts = html.split(/(<pre>[\s\S]*?<\/pre>)/);
+    html = parts.map(function(part) {
+      if (part.startsWith('<pre>')) return part;
+      // Convert single newlines to <br> and wrap in paragraphs
+      const paragraphs = part.split(/\n\n+/);
+      return paragraphs.map(function(p) {
+        p = p.trim();
+        if (!p) return '';
+        p = p.replace(/\n/g, '<br>');
+        return '<p>' + p + '</p>';
+      }).join('');
+    }).join('');
+
+    return html;
+  }
+
+  // ── Append a message to DOM ──
+  function appendMessage(role, content, isLoading) {
+    if (emptyState) emptyState.style.display = 'none';
+
+    const div = document.createElement('div');
+    div.className = 'message message-' + role;
+
+    const label = document.createElement('div');
+    label.className = 'message-label';
+    label.textContent = role === 'user' ? 'You' : 'Hermes';
+    div.appendChild(label);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    if (isLoading) {
+      contentDiv.innerHTML =
+        '<div class="loading-indicator">' +
+        '<div class="loading-dot"></div>' +
+        '<div class="loading-dot"></div>' +
+        '<div class="loading-dot"></div>' +
+        '</div>';
+    } else if (role === 'user') {
+      // User messages: render as plain text with line breaks
+      contentDiv.textContent = content;
+      contentDiv.innerHTML = '<p>' + contentDiv.innerHTML.replace(/\n/g, '<br>') + '</p>';
+    } else {
+      contentDiv.innerHTML = renderMarkdown(content);
+    }
+
+    div.appendChild(contentDiv);
+    chatArea.appendChild(div);
+    scrollToBottom();
+    return contentDiv;
+  }
+
+  function scrollToBottom() {
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  // ── Set streaming state ──
+  function setStreaming(val) {
+    isStreaming = val;
+    msgInput.disabled = val;
+    sendBtn.disabled = val;
+    if (!val) msgInput.focus();
+  }
+
+  // ── Send message ──
+  async function send() {
+    const text = msgInput.value.trim();
+    if (!text || isStreaming) return;
+
+    // Add user message
+    messages.push({ role: 'user', content: text });
+    appendMessage('user', text, false);
+    msgInput.value = '';
+    autoGrow();
+
+    // Show loading
+    const loadingContent = appendMessage('assistant', '', true);
+    const assistantDiv = loadingContent.parentElement;
+
+    setStreaming(true);
+
+    try {
+      const response = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messages,
+          stream: true
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        loadingContent.innerHTML = '<p style="color:var(--accent)">Error: ' + escapeHtml(err) + '</p>';
+        setStreaming(false);
+        return;
+      }
+
+      let fullText = '';
+      loadingContent.innerHTML = '';
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+          const data = trimmed.slice(5).trim();
+          if (data === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
+            if (delta && delta.content) {
+              fullText += delta.content;
+              loadingContent.innerHTML = renderMarkdown(fullText);
+              scrollToBottom();
+            }
+          } catch (e) {
+            // skip malformed chunks
+          }
+        }
+      }
+
+      // Final render
+      if (fullText) {
+        loadingContent.innerHTML = renderMarkdown(fullText);
+        messages.push({ role: 'assistant', content: fullText });
+      } else {
+        loadingContent.innerHTML = '<p style="color:#999">No response received.</p>';
+      }
+
+    } catch (err) {
+      loadingContent.innerHTML = '<p style="color:var(--accent)">Connection error: ' + escapeHtml(err.message) + '</p>';
+    }
+
+    setStreaming(false);
+    scrollToBottom();
+  }
+
+  function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+  }
+
+  // Focus input on load
+  msgInput.focus();
+})();
+</script>
+</body>
+</html>
