@@ -25,14 +25,23 @@ pub struct LlmClient {
 impl LlmClient {
     /// Create a new LLM client with the given configuration.
     pub fn new(config: LlmConfig) -> Self {
-        let http = Client::new();
+        let http = Client::builder()
+            .no_proxy()
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self { config, http }
     }
 
     /// Build the endpoint URL for chat completions.
+    /// If base_url already ends with `/v1`, appends `/chat/completions`.
+    /// Otherwise appends `/v1/chat/completions`.
     fn endpoint(&self) -> String {
         let base = self.config.base_url.trim_end_matches('/');
-        format!("{base}/v1/chat/completions")
+        if base.ends_with("/v1") {
+            format!("{base}/chat/completions")
+        } else {
+            format!("{base}/v1/chat/completions")
+        }
     }
 
     /// Build an HTTP request with common headers.
