@@ -433,7 +433,25 @@ impl Agent {
         let mut tc_state: std::collections::HashMap<u32, (String, String, String, String)> =
             std::collections::HashMap::new();
 
-        while let Some(chunk_result) = rx.recv().await {
+        // Track whether we're inside a <think> block (Qwen3 thinking mode).
+        let mut inside_think = false;
+
+        // Timeout for the entire streaming response (5 minutes).
+        let stream_timeout = std::time::Duration::from_secs(300);
+        let stream_deadline = tokio::time::Instant::now() + stream_timeout;
+
+        loop {
+            let chunk_result = match tokio::time::timeout_at(stream_deadline, rx.recv()).await {
+                Ok(Some(result)) => result,
+                Ok(None) => break, // channel closed, stream done
+                Err(_) => {
+                    warn!(
+                        "LLM streaming response timed out after {}s",
+                        stream_timeout.as_secs()
+                    );
+                    break;
+                }
+            };
             let chunk = chunk_result?;
 
             if response_id.is_empty() {
@@ -455,9 +473,13 @@ impl Agent {
                 }
 
                 if let Some(ref delta_content) = choice.delta.content {
-                    content.push_str(delta_content);
-                    if let Some(cb) = stream_callback {
-                        cb(delta_content);
+                    // Filter out <think> blocks — Qwen3 thinking mode.
+                    let filtered = filter_think_tags(delta_content, &mut inside_think);
+                    content.push_str(&filtered);
+                    if !filtered.is_empty()
+                        && let Some(cb) = stream_callback
+                    {
+                        cb(&filtered);
                     }
                 }
 
@@ -551,6 +573,41 @@ fn chrono_today() -> String {
     let days = secs / 86400;
     let (y, m, d) = epoch_days_to_ymd(days as i64);
     format!("{y:04}-{m:02}-{d:02}")
+}
+
+/// Filter out `<think>...</think>` blocks from streaming delta content.
+///
+/// Qwen3 models emit thinking tokens wrapped in `<think>` tags inside the
+/// content field. These should not be forwarded to the user. Because deltas
+/// arrive as small fragments, we track state across calls via `inside_think`.
+fn filter_think_tags(delta: &str, inside_think: &mut bool) -> String {
+    let mut result = String::new();
+    let mut remaining = delta;
+
+    while !remaining.is_empty() {
+        if *inside_think {
+            // Look for closing </think>
+            if let Some(pos) = remaining.find("</think>") {
+                *inside_think = false;
+                remaining = &remaining[pos + 8..];
+            } else {
+                // Entire delta is inside think block — discard
+                break;
+            }
+        } else {
+            // Look for opening <think>
+            if let Some(pos) = remaining.find("<think>") {
+                result.push_str(&remaining[..pos]);
+                *inside_think = true;
+                remaining = &remaining[pos + 7..];
+            } else {
+                result.push_str(remaining);
+                break;
+            }
+        }
+    }
+
+    result
 }
 
 /// Convert days since Unix epoch to (year, month, day).
