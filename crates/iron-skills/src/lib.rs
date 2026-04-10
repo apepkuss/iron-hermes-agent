@@ -1,5 +1,6 @@
 //! iron-skills crate — skill file parsing and discovery
 
+pub mod bundled;
 pub mod discovery;
 pub mod error;
 pub mod manager;

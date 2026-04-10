@@ -29,3 +29,4 @@ uuid = { version = "1", features = ["v4"] }
 regex = "1"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["ws"] }
+include_dir = "0.7"

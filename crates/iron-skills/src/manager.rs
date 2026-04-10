@@ -193,6 +193,14 @@ impl SkillManager {
         Ok(skill_file.clone())
     }
 
+    /// Extract bundled skills on first run. Call during initialization.
+    pub fn ensure_bundled_skills(&self) -> anyhow::Result<u32> {
+        if self.skills_dirs.is_empty() {
+            return Ok(0);
+        }
+        crate::bundled::extract_bundled_skills(&self.skills_dirs[0])
+    }
+
     /// Delete a skill by removing its directory.
     pub fn delete_skill(&self, name: &str) -> Result<(), SkillError> {
         let skill = self.discovery.load_skill(name)?;
