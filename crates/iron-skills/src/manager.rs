@@ -213,6 +213,66 @@ impl SkillManager {
         fs::remove_dir_all(skill_dir)?;
         Ok(())
     }
+
+    const ALLOWED_LINKED_DIRS: [&'static str; 4] = ["references", "templates", "scripts", "assets"];
+
+    pub fn write_linked_file(
+        &self,
+        name: &str,
+        file_path: &str,
+        content: &str,
+    ) -> Result<PathBuf, SkillError> {
+        check_path_traversal(file_path).map_err(SkillError::SecurityViolation)?;
+
+        let skill = self.discovery.load_skill(name)?;
+        let skill_dir = skill
+            .path
+            .parent()
+            .ok_or_else(|| SkillError::Other(anyhow::anyhow!("skill path has no parent")))?;
+
+        let first_segment = file_path.split('/').next().unwrap_or("");
+        if !Self::ALLOWED_LINKED_DIRS.contains(&first_segment) {
+            return Err(SkillError::InvalidName(format!(
+                "linked file must be under one of {:?}, got '{}'",
+                Self::ALLOWED_LINKED_DIRS,
+                first_segment
+            )));
+        }
+
+        let full_path = skill_dir.join(file_path);
+        if !full_path.starts_with(skill_dir) {
+            return Err(SkillError::SecurityViolation(
+                "resolved path escapes skill directory".to_string(),
+            ));
+        }
+
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        atomic_write(&full_path, content)?;
+
+        Ok(full_path)
+    }
+
+    pub fn remove_linked_file(&self, name: &str, file_path: &str) -> Result<(), SkillError> {
+        check_path_traversal(file_path).map_err(SkillError::SecurityViolation)?;
+
+        let skill = self.discovery.load_skill(name)?;
+        let skill_dir = skill
+            .path
+            .parent()
+            .ok_or_else(|| SkillError::Other(anyhow::anyhow!("skill path has no parent")))?;
+
+        let full_path = skill_dir.join(file_path);
+        if !full_path.starts_with(skill_dir) {
+            return Err(SkillError::SecurityViolation(
+                "resolved path escapes skill directory".to_string(),
+            ));
+        }
+
+        fs::remove_file(&full_path)?;
+        Ok(())
+    }
 }
 
 /// Write `content` to `path` atomically using a sibling temp file + rename.
