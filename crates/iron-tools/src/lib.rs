@@ -12,6 +12,9 @@ pub use iron_tool_api::{ToolContext, ToolError, ToolModule, ToolRegistry, ToolRe
 
 // Handler implementations
 pub mod file;
+pub mod file_module;
 pub mod register_all;
 pub mod terminal;
+pub mod terminal_module;
 pub mod web;
+pub mod web_module;
