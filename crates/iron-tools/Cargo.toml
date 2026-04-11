@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+iron-tool-api = { path = "../iron-tool-api" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
