@@ -6,6 +6,7 @@ license.workspace = true
 
 [dependencies]
 iron-core = { path = "../iron-core" }
+iron-tool-api = { path = "../iron-tool-api" }
 iron-tools = { path = "../iron-tools" }
 iron-memory = { path = "../iron-memory" }
 iron-skills = { path = "../iron-skills" }
