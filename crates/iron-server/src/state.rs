@@ -33,7 +33,9 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
     // Skills
     let skills_dir = base.join("skills");
     std::fs::create_dir_all(&skills_dir).ok();
-    let skill_manager = Arc::new(SkillManager::new(vec![skills_dir], HashSet::new()));
+    let skill_manager = SkillManager::new(vec![skills_dir], HashSet::new());
+    skill_manager.ensure_bundled_skills().ok();
+    let skill_manager = Arc::new(skill_manager);
 
     // Tool registry — assemble via ToolModule trait
     let mut registry = ToolRegistry::new();
