@@ -108,22 +108,13 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
     };
 
     let llm_client = make_llm_client(&state, payload.model.as_deref());
-    let memory_manager = state.memory_manager.lock().await;
     let agent_config = AgentConfig {
         model_name: state.config.model_name.clone(),
         ..AgentConfig::default()
     };
 
-    // Agent requires owned MemoryManager and SkillManager — clone/recreate them.
-    // For Phase 1, create lightweight copies.
-    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-    let base = home.join(".iron-hermes");
-    let mut mem = iron_memory::manager::MemoryManager::new(base.join("memories"), None, None);
-    mem.initialize().ok();
-    drop(memory_manager);
-
-    let skill_dirs: Vec<std::path::PathBuf> = vec![base.join("skills")];
-    let sm = iron_skills::manager::SkillManager::new(skill_dirs, std::collections::HashSet::new());
+    let mem = Arc::clone(&state.memory_manager);
+    let sm = Arc::clone(&state.skill_manager);
 
     let mut agent = Agent::new(
         llm_client,
@@ -205,14 +196,8 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
     tokio::spawn(async move {
         let llm_client = make_llm_client(&state, model_override.as_deref());
 
-        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-        let base = home.join(".iron-hermes");
-        let mut mem = iron_memory::manager::MemoryManager::new(base.join("memories"), None, None);
-        mem.initialize().ok();
-
-        let skill_dirs: Vec<std::path::PathBuf> = vec![base.join("skills")];
-        let sm =
-            iron_skills::manager::SkillManager::new(skill_dirs, std::collections::HashSet::new());
+        let mem = Arc::clone(&state.memory_manager);
+        let sm = Arc::clone(&state.skill_manager);
 
         let agent_config = AgentConfig {
             model_name: model_name_clone,

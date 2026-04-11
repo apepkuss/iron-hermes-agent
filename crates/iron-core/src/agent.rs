@@ -14,6 +14,7 @@ use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
 use iron_tools::registry::ToolRegistry;
 use iron_tools::types::ToolContext;
+use tokio::sync::Mutex;
 
 // ─── Configuration ───
 
@@ -91,8 +92,8 @@ impl SessionState {
 pub struct Agent {
     llm_client: LlmClient,
     tool_registry: Arc<ToolRegistry>,
-    memory_manager: MemoryManager,
-    skill_manager: SkillManager,
+    memory_manager: Arc<Mutex<MemoryManager>>,
+    skill_manager: Arc<SkillManager>,
     config: AgentConfig,
 }
 
@@ -101,8 +102,8 @@ impl Agent {
     pub fn new(
         llm_client: LlmClient,
         tool_registry: Arc<ToolRegistry>,
-        memory_manager: MemoryManager,
-        skill_manager: SkillManager,
+        memory_manager: Arc<Mutex<MemoryManager>>,
+        skill_manager: Arc<SkillManager>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -346,7 +347,12 @@ impl Agent {
 
     /// Build the system prompt using [`PromptBuilder`].
     fn build_system_prompt(&self, session: &SessionState) -> String {
-        let memory_block = self.memory_manager.system_prompt_block();
+        let memory_block = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let mgr = self.memory_manager.lock().await;
+                mgr.system_prompt_block()
+            })
+        });
         let available_tools = self.tool_registry.tool_names();
         let skills_index = self
             .skill_manager

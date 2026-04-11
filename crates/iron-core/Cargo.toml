@@ -9,6 +9,7 @@ iron-tools = { path = "../iron-tools" }
 iron-memory = { path = "../iron-memory" }
 iron-skills = { path = "../iron-skills" }
 iron-sandbox = { path = "../iron-sandbox" }
+iron-tool-api = { path = "../iron-tool-api" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
