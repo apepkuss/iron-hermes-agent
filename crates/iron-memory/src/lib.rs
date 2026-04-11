@@ -5,6 +5,7 @@ pub mod manager;
 pub mod provider;
 pub mod security;
 pub mod store;
+pub mod tool_module;
 
 pub use error::MemoryError;
 pub use manager::MemoryManager;

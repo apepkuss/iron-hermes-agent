@@ -824,6 +824,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "iron-tool-api",
  "regex",
  "serde",
  "serde_json",
@@ -864,6 +865,7 @@ dependencies = [
  "iron-memory",
  "iron-sandbox",
  "iron-skills",
+ "iron-tool-api",
  "iron-tools",
  "mime_guess",
  "reqwest",
@@ -885,6 +887,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "include_dir",
+ "iron-tool-api",
  "regex",
  "serde",
  "serde_json",
@@ -895,11 +898,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "iron-tool-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "iron-tools"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "iron-tool-api",
  "libc",
  "regex",
  "reqwest",
