@@ -13,6 +13,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 regex = { workspace = true }
 include_dir = { workspace = true }
+iron-tool-api = { path = "../iron-tool-api" }
 
 [dev-dependencies]
 tempfile = "3"

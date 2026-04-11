@@ -6,6 +6,7 @@ pub mod error;
 pub mod manager;
 pub mod parser;
 pub mod security;
+pub mod tool_module;
 pub mod types;
 
 pub use discovery::SkillDiscovery;
