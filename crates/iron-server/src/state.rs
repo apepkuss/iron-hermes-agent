@@ -4,7 +4,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use iron_memory::manager::MemoryManager;
+use iron_memory::tool_module::MemoryTools;
 use iron_skills::manager::SkillManager;
+use iron_skills::tool_module::SkillTools;
 use iron_tool_api::{ToolModule, ToolRegistry};
 use iron_tools::{file_module::FileTools, terminal_module::TerminalTools, web_module::WebTools};
 
@@ -14,7 +16,6 @@ pub struct AppState {
     pub config: ServerConfig,
     pub tool_registry: Arc<ToolRegistry>,
     pub memory_manager: Arc<Mutex<MemoryManager>>,
-    #[allow(dead_code)]
     pub skill_manager: Arc<SkillManager>,
 }
 
@@ -41,6 +42,12 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         Box::new(TerminalTools::new(30)),
         Box::new(FileTools),
         Box::new(WebTools::from_env()),
+        Box::new(SkillTools {
+            manager: Arc::clone(&skill_manager),
+        }),
+        Box::new(MemoryTools {
+            manager: Arc::clone(&memory_manager),
+        }),
     ];
 
     for module in modules {
