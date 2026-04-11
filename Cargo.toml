@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/iron-tool-api",
     "crates/iron-core",
     "crates/iron-memory",
     "crates/iron-skills",
