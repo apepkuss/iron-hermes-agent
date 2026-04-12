@@ -1,5 +1,7 @@
 use iron_core::{
-    context_compressor::{CompressorConfig, ContextCompressor, PRUNED_PLACEHOLDER},
+    context_compressor::{
+        COMPACTION_PREFIX, CompressorConfig, ContextCompressor, PRUNED_PLACEHOLDER,
+    },
     llm::types::{FunctionCall, Message, ToolCall},
 };
 
@@ -331,5 +333,137 @@ fn test_find_boundaries_too_few_messages() {
         "expected no compressible middle but got head_end={} tail_start={}",
         boundary.head_end,
         boundary.tail_start
+    );
+}
+
+// ── sanitize_tool_pairs ──────────────────────────────────────────────────────
+
+fn make_tool_call_message(call_id: &str, fn_name: &str) -> Message {
+    Message {
+        role: "assistant".to_string(),
+        content: None,
+        tool_calls: Some(vec![ToolCall {
+            id: call_id.to_string(),
+            r#type: "function".to_string(),
+            function: FunctionCall {
+                name: fn_name.to_string(),
+                arguments: "{}".to_string(),
+            },
+        }]),
+        tool_call_id: None,
+        name: None,
+    }
+}
+
+#[test]
+fn test_sanitize_tool_pairs_removes_orphan_result() {
+    // A tool result whose tool_call_id has no matching assistant tool_call
+    // should be removed.
+    let mut messages = vec![
+        make_message("user", "hello"),
+        make_message("assistant", "ok"),
+        // orphan result — no assistant message references "orphan_id"
+        make_tool_result("some result", "orphan_id"),
+        make_message("user", "next"),
+    ];
+
+    ContextCompressor::sanitize_tool_pairs(&mut messages);
+
+    // The orphan tool result should have been removed
+    assert_eq!(messages.len(), 3);
+    assert!(
+        messages.iter().all(|m| m.role != "tool"),
+        "orphan tool result should be removed"
+    );
+}
+
+#[test]
+fn test_sanitize_tool_pairs_injects_stub_for_orphan_call() {
+    // An assistant tool_call with no corresponding tool result should get a stub injected.
+    let mut messages = vec![
+        make_message("user", "call a tool"),
+        make_tool_call_message("call_abc", "my_tool"),
+        // No tool result for "call_abc"
+        make_message("user", "next"),
+    ];
+
+    ContextCompressor::sanitize_tool_pairs(&mut messages);
+
+    // A stub result should now appear right after the assistant message (index 1)
+    assert_eq!(messages.len(), 4, "stub should have been inserted");
+    let stub = &messages[2];
+    assert_eq!(stub.role, "tool");
+    assert_eq!(stub.tool_call_id.as_deref(), Some("call_abc"));
+    assert_eq!(stub.name.as_deref(), Some("my_tool"));
+    assert_eq!(
+        stub.content.as_deref(),
+        Some(iron_core::context_compressor::STUB_TOOL_RESULT)
+    );
+}
+
+// ── assemble ─────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_assemble_with_summary() {
+    let compressor = ContextCompressor::new(make_config(100_000, 0.65, 0.20));
+
+    let head = vec![
+        make_message("user", "msg1"),
+        make_message("assistant", "msg2"),
+        make_message("user", "msg3"),
+    ];
+    let tail = vec![
+        make_message("assistant", "msg4"),
+        make_message("user", "msg5"),
+    ];
+    let summary = Some("This is the summary.".to_string());
+
+    let result = compressor.assemble(&head, summary, &tail);
+
+    // 3 head + 1 summary + 2 tail = 6
+    assert_eq!(result.len(), 6, "expected 6 messages");
+
+    // The summary message should be at index 3
+    let summary_msg = &result[3];
+    assert!(
+        summary_msg
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .starts_with(COMPACTION_PREFIX),
+        "summary message should start with COMPACTION_PREFIX"
+    );
+    assert!(
+        summary_msg
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .contains("This is the summary."),
+        "summary message should contain the summary text"
+    );
+}
+
+#[test]
+fn test_assemble_without_summary() {
+    let compressor = ContextCompressor::new(make_config(100_000, 0.65, 0.20));
+
+    let head = vec![
+        make_message("user", "msg1"),
+        make_message("assistant", "msg2"),
+    ];
+    let tail = vec![make_message("user", "msg3")];
+
+    let result = compressor.assemble(&head, None, &tail);
+
+    // 2 head + 0 summary + 1 tail = 3
+    assert_eq!(result.len(), 3, "expected 3 messages with no summary");
+    // No summary message present
+    assert!(
+        result.iter().all(|m| !m
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .contains(COMPACTION_PREFIX)),
+        "no message should contain COMPACTION_PREFIX when summary is None"
     );
 }

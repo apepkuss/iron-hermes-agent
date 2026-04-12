@@ -2,6 +2,11 @@ use std::time::Instant;
 
 use crate::llm::types::Message;
 
+/// Prefix inserted before a generated context summary.
+pub const COMPACTION_PREFIX: &str = "[CONTEXT COMPACTION] Earlier turns were compacted into the summary below.\nRefer to it for context on prior work.\n\n";
+/// Stub content inserted for orphaned tool_calls that have no result.
+pub const STUB_TOOL_RESULT: &str = "[Result from earlier conversation — see context summary above]";
+
 #[derive(Debug, Clone)]
 pub struct AuxiliaryLlmConfig {
     pub base_url: String,
@@ -209,5 +214,112 @@ impl ContextCompressor {
         // If we landed on an assistant message that has tool_calls, include it
         // (pos is already pointing at it, so the tail includes it). Done.
         pos
+    }
+
+    /// Phase 4a: Sanitize tool pairs in a message list.
+    ///
+    /// - Removes orphan tool results (tool messages whose `tool_call_id` is not
+    ///   referenced by any assistant `tool_calls` entry).
+    /// - Injects a stub result for orphan calls (assistant `tool_calls` entries
+    ///   whose `id` has no corresponding tool message).
+    pub fn sanitize_tool_pairs(messages: &mut Vec<Message>) {
+        // ── Collect all call IDs produced by assistant tool_calls ──────────────
+        let call_ids: std::collections::HashSet<String> = messages
+            .iter()
+            .filter_map(|m| m.tool_calls.as_deref())
+            .flatten()
+            .map(|tc| tc.id.clone())
+            .collect();
+
+        // ── Collect all call IDs consumed by tool result messages ──────────────
+        let result_call_ids: std::collections::HashSet<String> = messages
+            .iter()
+            .filter(|m| m.role == "tool")
+            .filter_map(|m| m.tool_call_id.as_deref())
+            .map(|id| id.to_string())
+            .collect();
+
+        // ── Remove orphan tool results ─────────────────────────────────────────
+        messages.retain(|m| {
+            if m.role == "tool" {
+                // Keep only if this tool_call_id exists in call_ids
+                m.tool_call_id
+                    .as_deref()
+                    .map(|id| call_ids.contains(id))
+                    .unwrap_or(false)
+            } else {
+                true
+            }
+        });
+
+        // ── Inject stub results for orphan calls ───────────────────────────────
+        // Collect (assistant_msg_index, orphan tool_calls) for injection.
+        // We must work with indices into the already-modified messages vec.
+        let mut injections: Vec<(usize, Vec<(String, String)>)> = Vec::new();
+        for (i, msg) in messages.iter().enumerate() {
+            if let Some(tool_calls) = msg.tool_calls.as_deref() {
+                let orphans: Vec<(String, String)> = tool_calls
+                    .iter()
+                    .filter(|tc| !result_call_ids.contains(&tc.id))
+                    .map(|tc| (tc.id.clone(), tc.function.name.clone()))
+                    .collect();
+                if !orphans.is_empty() {
+                    injections.push((i, orphans));
+                }
+            }
+        }
+
+        // Insert in reverse order of assistant index to preserve positions.
+        for (assistant_idx, orphans) in injections.into_iter().rev() {
+            // Insert stubs right after the assistant message, in reverse orphan order
+            // so that the first orphan ends up first after insertion.
+            for (call_id, fn_name) in orphans.into_iter().rev() {
+                let stub = Message {
+                    role: "tool".to_string(),
+                    content: Some(STUB_TOOL_RESULT.to_string()),
+                    tool_calls: None,
+                    tool_call_id: Some(call_id),
+                    name: Some(fn_name),
+                };
+                messages.insert(assistant_idx + 1, stub);
+            }
+        }
+    }
+
+    /// Phase 4b: Assemble the final message list from head, optional summary, and tail.
+    ///
+    /// The summary message role is chosen to avoid role conflicts with adjacent messages:
+    /// tries "user" first, then "assistant", then "system".
+    pub fn assemble(
+        &self,
+        head: &[Message],
+        summary: Option<String>,
+        tail: &[Message],
+    ) -> Vec<Message> {
+        let mut result: Vec<Message> = head.to_vec();
+
+        if let Some(summary_text) = summary {
+            // Determine a role that doesn't conflict with head's last or tail's first.
+            let last_head_role = head.last().map(|m| m.role.as_str()).unwrap_or("");
+            let first_tail_role = tail.first().map(|m| m.role.as_str()).unwrap_or("");
+
+            let summary_role = ["user", "assistant", "system"]
+                .iter()
+                .find(|&&r| r != last_head_role && r != first_tail_role)
+                .copied()
+                .unwrap_or("user");
+
+            let summary_msg = Message {
+                role: summary_role.to_string(),
+                content: Some(format!("{COMPACTION_PREFIX}{summary_text}")),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+            };
+            result.push(summary_msg);
+        }
+
+        result.extend_from_slice(tail);
+        result
     }
 }
