@@ -4,6 +4,7 @@ use serde_json::Value;
 use tracing::{debug, error, warn};
 
 use crate::budget::IterationBudget;
+use crate::context_compressor::{CompressorConfig, ContextCompressor};
 use crate::error::CoreError;
 use crate::llm::client::LlmClient;
 use crate::llm::types::Message;
@@ -28,6 +29,8 @@ pub struct AgentConfig {
     pub context_files: Vec<String>,
     /// Model name for metadata in the system prompt.
     pub model_name: String,
+    /// Optional context compressor configuration. When set, compression is enabled.
+    pub compressor_config: Option<CompressorConfig>,
 }
 
 impl Default for AgentConfig {
@@ -37,6 +40,7 @@ impl Default for AgentConfig {
             identity: None,
             context_files: Vec::new(),
             model_name: String::from("unknown"),
+            compressor_config: None,
         }
     }
 }
@@ -95,6 +99,7 @@ pub struct Agent {
     memory_manager: Arc<Mutex<MemoryManager>>,
     skill_manager: Arc<SkillManager>,
     config: AgentConfig,
+    context_compressor: Option<ContextCompressor>,
 }
 
 impl Agent {
@@ -106,12 +111,17 @@ impl Agent {
         skill_manager: Arc<SkillManager>,
         config: AgentConfig,
     ) -> Self {
+        let context_compressor = config
+            .compressor_config
+            .as_ref()
+            .map(|c| ContextCompressor::new(c.clone()));
         Self {
             llm_client,
             tool_registry,
             memory_manager,
             skill_manager,
             config,
+            context_compressor,
         }
     }
 
@@ -221,6 +231,22 @@ impl Agent {
                 total_usage.prompt_tokens += usage.prompt_tokens;
                 total_usage.completion_tokens += usage.completion_tokens;
                 total_usage.total_tokens += usage.total_tokens;
+            }
+
+            // Context compression check.
+            if let Some(ref mut compressor) = self.context_compressor {
+                if let Some(ref usage) = response.usage {
+                    if compressor.should_compress(usage.prompt_tokens as u64) {
+                        debug!(
+                            "Context compression triggered at {} prompt tokens",
+                            usage.prompt_tokens
+                        );
+                        session.messages = compressor
+                            .compress(&session.messages, usage.prompt_tokens as u64)
+                            .await;
+                        session.system_prompt = Some(self.build_system_prompt(session));
+                    }
+                }
             }
 
             // d. Parse response — extract assistant message.
