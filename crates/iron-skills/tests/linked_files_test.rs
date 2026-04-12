@@ -5,9 +5,7 @@ use std::path::Path;
 use iron_skills::manager::SkillManager;
 
 fn make_skill_content(name: &str, description: &str) -> String {
-    format!(
-        "---\nname: {name}\ndescription: {description}\n---\n# {name}\n\nSkill body.\n"
-    )
+    format!("---\nname: {name}\ndescription: {description}\n---\n# {name}\n\nSkill body.\n")
 }
 
 fn write_skill(root: &Path, category: &str, name: &str) {
@@ -66,7 +64,9 @@ fn test_remove_linked_file() {
         .write_linked_file("my-skill", "scripts/run.sh", "#!/bin/bash\necho hi")
         .unwrap();
 
-    manager.remove_linked_file("my-skill", "scripts/run.sh").unwrap();
+    manager
+        .remove_linked_file("my-skill", "scripts/run.sh")
+        .unwrap();
 
     let file_path = root.join("tools/my-skill/scripts/run.sh");
     assert!(!file_path.exists());

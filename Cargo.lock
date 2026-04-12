@@ -805,6 +805,7 @@ dependencies = [
  "iron-memory",
  "iron-sandbox",
  "iron-skills",
+ "iron-tool-api",
  "iron-tools",
  "regex",
  "reqwest",
