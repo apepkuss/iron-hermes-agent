@@ -46,6 +46,7 @@ html, body {
   padding: 28px 24px 20px;
   text-align: center;
   flex-shrink: 0;
+  position: relative;
 }
 
 .header h1 {
@@ -94,6 +95,295 @@ html, body {
 
 .model-selector select:focus {
   border-color: var(--text);
+}
+
+/* ── Settings gear button ── */
+.settings-btn {
+  position: absolute;
+  top: 28px;
+  right: 24px;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+  line-height: 1;
+}
+
+.settings-btn:hover {
+  opacity: 1;
+  border-color: var(--text);
+}
+
+.settings-btn.active {
+  opacity: 1;
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--white);
+}
+
+/* ── Settings overlay backdrop ── */
+.settings-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.2);
+  z-index: 100;
+}
+
+.settings-backdrop.open {
+  display: block;
+}
+
+/* ── Settings panel ── */
+.settings-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 320px;
+  height: 100%;
+  background: var(--white);
+  border-left: 1px solid var(--border);
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+}
+
+.settings-panel.open {
+  transform: translateX(0);
+}
+
+.settings-panel-header {
+  padding: 24px 20px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.settings-panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.settings-close-btn {
+  width: 24px;
+  height: 24px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text);
+  opacity: 0.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: opacity 0.15s ease;
+}
+
+.settings-close-btn:hover {
+  opacity: 1;
+}
+
+.settings-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  flex: 1;
+}
+
+/* ── Settings field ── */
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.5;
+}
+
+.settings-input {
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.settings-input:focus {
+  border-color: var(--text);
+}
+
+.settings-input::placeholder {
+  color: #AAAAAA;
+}
+
+.settings-select {
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 7px 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.settings-select:focus {
+  border-color: var(--text);
+}
+
+.settings-hint {
+  font-size: 11px;
+  color: #AAAAAA;
+  line-height: 1.4;
+}
+
+/* ── Slider field ── */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-value {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  min-width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.settings-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--border);
+  outline: none;
+  border-radius: 1px;
+  cursor: pointer;
+}
+
+.settings-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--text);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--text);
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s ease;
+}
+
+.settings-slider::-webkit-slider-thumb:hover {
+  background: var(--accent);
+}
+
+.settings-slider::-moz-range-thumb:hover {
+  background: var(--accent);
+}
+
+.slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.slider-tick {
+  font-size: 10px;
+  color: #AAAAAA;
+  letter-spacing: 0.03em;
+}
+
+/* ── Settings footer ── */
+.settings-footer {
+  padding: 16px 20px 24px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.settings-save-btn {
+  width: 100%;
+  padding: 10px;
+  background: var(--text);
+  color: var(--white);
+  border: none;
+  border-radius: 2px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.settings-save-btn:hover {
+  opacity: 0.8;
+}
+
+.settings-save-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-status {
+  font-size: 11px;
+  text-align: center;
+  margin-top: 8px;
+  min-height: 16px;
+  color: #AAAAAA;
+}
+
+.settings-status.ok {
+  color: #4CAF50;
+}
+
+.settings-status.err {
+  color: var(--accent);
 }
 
 /* ── Chat area ── */
@@ -348,11 +638,18 @@ html, body {
   .header {
     padding: 20px 16px 16px;
   }
+  .settings-btn {
+    top: 20px;
+    right: 16px;
+  }
   .chat-area {
     padding: 0 16px 16px;
   }
   .input-area {
     padding: 12px 16px 16px;
+  }
+  .settings-panel {
+    width: 100%;
   }
 }
 
@@ -367,6 +664,17 @@ html, body {
   background: var(--border);
   border-radius: 2px;
 }
+
+.settings-panel::-webkit-scrollbar {
+  width: 4px;
+}
+.settings-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.settings-panel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
 </style>
 </head>
 <body>
@@ -378,6 +686,7 @@ html, body {
       <label for="modelSelect">MODEL</label>
       <select id="modelSelect"><option value="">loading...</option></select>
     </div>
+    <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
   </header>
 
   <div class="chat-area" id="chatArea">
@@ -399,6 +708,80 @@ html, body {
   </div>
 </div>
 
+<!-- Settings backdrop -->
+<div class="settings-backdrop" id="settingsBackdrop"></div>
+
+<!-- Settings panel -->
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-panel-header">
+    <span class="settings-panel-title">Settings</span>
+    <button class="settings-close-btn" id="settingsCloseBtn" title="Close">&#10005;</button>
+  </div>
+
+  <div class="settings-body">
+    <!-- Provider Base URL -->
+    <div class="settings-field">
+      <label class="settings-label" for="providerUrl">Provider URL</label>
+      <input
+        class="settings-input"
+        id="providerUrl"
+        type="text"
+        placeholder="http://localhost:9068/v1"
+        value="http://localhost:9068/v1"
+      >
+    </div>
+
+    <!-- Auxiliary Model -->
+    <div class="settings-field">
+      <label class="settings-label" for="auxModelSelect">Auxiliary Model</label>
+      <select class="settings-select" id="auxModelSelect">
+        <option value="">None</option>
+      </select>
+      <span class="settings-hint">No auxiliary model = degraded compression</span>
+    </div>
+
+    <!-- Compression Threshold -->
+    <div class="settings-field">
+      <label class="settings-label">Compression Threshold</label>
+      <div class="slider-row">
+        <input
+          class="settings-slider"
+          id="compressionSlider"
+          type="range"
+          min="50"
+          max="95"
+          step="5"
+          value="65"
+        >
+        <span class="slider-value" id="sliderValueDisplay">65%</span>
+      </div>
+      <div class="slider-ticks">
+        <span class="slider-tick">50% Conservative</span>
+        <span class="slider-tick">65% Default</span>
+        <span class="slider-tick">80% Aggressive</span>
+      </div>
+    </div>
+
+    <!-- Context Length Override -->
+    <div class="settings-field">
+      <label class="settings-label" for="contextLength">Context Length</label>
+      <input
+        class="settings-input"
+        id="contextLength"
+        type="number"
+        placeholder="auto"
+        min="1"
+      >
+      <span class="settings-hint">Leave empty for auto-detection</span>
+    </div>
+  </div>
+
+  <div class="settings-footer">
+    <button class="settings-save-btn" id="settingsSaveBtn">Save</button>
+    <div class="settings-status" id="settingsStatus"></div>
+  </div>
+</div>
+
 <script>
 (function() {
   const chatArea = document.getElementById('chatArea');
@@ -407,32 +790,200 @@ html, body {
   const sendBtn = document.getElementById('sendBtn');
   const modelSelect = document.getElementById('modelSelect');
 
+  // Settings elements
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const settingsBackdrop = document.getElementById('settingsBackdrop');
+  const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+  const providerUrlInput = document.getElementById('providerUrl');
+  const auxModelSelect = document.getElementById('auxModelSelect');
+  const compressionSlider = document.getElementById('compressionSlider');
+  const sliderValueDisplay = document.getElementById('sliderValueDisplay');
+  const contextLengthInput = document.getElementById('contextLength');
+  const settingsSaveBtn = document.getElementById('settingsSaveBtn');
+  const settingsStatus = document.getElementById('settingsStatus');
+
   let messages = [];
   let isStreaming = false;
   let abortController = null;
 
   // ── Fetch provider models ──
-  async function loadModels() {
+  async function loadModels(baseUrl) {
+    const url = baseUrl ? (baseUrl.replace(/\/$/, '') + '/models') : '/v1/provider/models';
     try {
-      const resp = await fetch('/v1/provider/models');
+      const resp = await fetch(url);
       if (!resp.ok) throw new Error('Failed to fetch models');
       const data = await resp.json();
-      const models = (data.data || []).map(m => m.id);
-      modelSelect.innerHTML = '';
-      models.forEach(function(id) {
-        const opt = document.createElement('option');
-        opt.value = id;
-        opt.textContent = id;
-        modelSelect.appendChild(opt);
-      });
-      if (models.length === 0) {
-        modelSelect.innerHTML = '<option value="">no models</option>';
-      }
+      return (data.data || []).map(function(m) { return m.id; });
     } catch (e) {
-      modelSelect.innerHTML = '<option value="">unavailable</option>';
+      return [];
     }
   }
-  loadModels();
+
+  async function populateMainModelSelect(models) {
+    const current = modelSelect.value;
+    modelSelect.innerHTML = '';
+    if (models.length === 0) {
+      modelSelect.innerHTML = '<option value="">unavailable</option>';
+      return;
+    }
+    models.forEach(function(id) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      modelSelect.appendChild(opt);
+    });
+    // Restore previous selection if still available
+    if (current && models.indexOf(current) !== -1) {
+      modelSelect.value = current;
+    }
+  }
+
+  async function populateAuxModelSelect(models, selectedValue) {
+    const current = selectedValue !== undefined ? selectedValue : auxModelSelect.value;
+    auxModelSelect.innerHTML = '<option value="">None</option>';
+    models.forEach(function(id) {
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = id;
+      auxModelSelect.appendChild(opt);
+    });
+    if (current && models.indexOf(current) !== -1) {
+      auxModelSelect.value = current;
+    }
+  }
+
+  async function initModels() {
+    modelSelect.innerHTML = '<option value="">loading...</option>';
+    const models = await loadModels(null);
+    await populateMainModelSelect(models);
+    await populateAuxModelSelect(models, undefined);
+  }
+  initModels();
+
+  // ── Load config from API ──
+  async function loadConfig() {
+    try {
+      const resp = await fetch('/api/config');
+      if (!resp.ok) return;
+      const cfg = await resp.json();
+      if (cfg.provider_url) {
+        providerUrlInput.value = cfg.provider_url;
+      }
+      if (cfg.compression_threshold !== undefined && cfg.compression_threshold !== null) {
+        compressionSlider.value = Math.round(cfg.compression_threshold * 100);
+        sliderValueDisplay.textContent = compressionSlider.value + '%';
+      }
+      if (cfg.context_length !== undefined && cfg.context_length !== null) {
+        contextLengthInput.value = cfg.context_length;
+      }
+      // aux_model will be set after models are loaded
+      if (cfg.aux_model) {
+        // Poll until aux model select is populated
+        var attempts = 0;
+        var trySetAux = function() {
+          attempts++;
+          if (auxModelSelect.options.length > 1) {
+            auxModelSelect.value = cfg.aux_model || '';
+          } else if (attempts < 20) {
+            setTimeout(trySetAux, 100);
+          }
+        };
+        setTimeout(trySetAux, 200);
+      }
+    } catch (e) {
+      // Config endpoint may not exist yet — silently ignore
+    }
+  }
+  loadConfig();
+
+  // ── Re-fetch models when provider URL changes ──
+  var providerUrlTimer = null;
+  providerUrlInput.addEventListener('input', function() {
+    clearTimeout(providerUrlTimer);
+    providerUrlTimer = setTimeout(async function() {
+      const url = providerUrlInput.value.trim();
+      if (!url) return;
+      const models = await loadModels(url);
+      if (models.length > 0) {
+        await populateMainModelSelect(models);
+        await populateAuxModelSelect(models, undefined);
+      }
+    }, 600);
+  });
+
+  // ── Slider live update ──
+  compressionSlider.addEventListener('input', function() {
+    sliderValueDisplay.textContent = compressionSlider.value + '%';
+  });
+
+  // ── Settings panel open/close ──
+  function openSettings() {
+    settingsPanel.classList.add('open');
+    settingsBackdrop.classList.add('open');
+    settingsBtn.classList.add('active');
+  }
+
+  function closeSettings() {
+    settingsPanel.classList.remove('open');
+    settingsBackdrop.classList.remove('open');
+    settingsBtn.classList.remove('active');
+  }
+
+  settingsBtn.addEventListener('click', function() {
+    if (settingsPanel.classList.contains('open')) {
+      closeSettings();
+    } else {
+      openSettings();
+    }
+  });
+
+  settingsCloseBtn.addEventListener('click', closeSettings);
+  settingsBackdrop.addEventListener('click', closeSettings);
+
+  // Close on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && settingsPanel.classList.contains('open')) {
+      closeSettings();
+    }
+  });
+
+  // ── Save config ──
+  settingsSaveBtn.addEventListener('click', async function() {
+    settingsSaveBtn.disabled = true;
+    settingsStatus.textContent = '';
+    settingsStatus.className = 'settings-status';
+
+    const payload = {
+      provider_url: providerUrlInput.value.trim() || null,
+      aux_model: auxModelSelect.value || null,
+      compression_threshold: parseFloat(compressionSlider.value) / 100,
+      context_length: contextLengthInput.value ? parseInt(contextLengthInput.value, 10) : null
+    };
+
+    try {
+      const resp = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(errText || resp.statusText);
+      }
+      settingsStatus.textContent = 'Saved';
+      settingsStatus.className = 'settings-status ok';
+      setTimeout(function() {
+        settingsStatus.textContent = '';
+        settingsStatus.className = 'settings-status';
+      }, 2000);
+    } catch (e) {
+      settingsStatus.textContent = 'Error: ' + e.message;
+      settingsStatus.className = 'settings-status err';
+    } finally {
+      settingsSaveBtn.disabled = false;
+    }
+  });
 
   // ── Auto-grow textarea ──
   function autoGrow() {
