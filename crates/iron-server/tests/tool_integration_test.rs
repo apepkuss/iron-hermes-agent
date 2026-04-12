@@ -157,8 +157,7 @@ fn test_skill_manage_create_view_delete() {
     let (registry, _tmp) = build_full_registry();
     let ctx = make_ctx(&registry);
 
-    let skill_content =
-        "---\nname: integration-test-skill\ndescription: Created by integration test\n---\n# Test\nBody.\n";
+    let skill_content = "---\nname: integration-test-skill\ndescription: Created by integration test\n---\n# Test\nBody.\n";
 
     let create = registry
         .dispatch_sync(
@@ -269,5 +268,8 @@ fn test_system_prompt_contains_skill_index() {
     let index = skill_manager.build_system_prompt_index(&available_tools);
 
     assert!(!index.is_empty(), "skill index should not be empty");
-    assert!(index.contains("skill_view"), "index should reference skill_view");
+    assert!(
+        index.contains("skill_view"),
+        "index should reference skill_view"
+    );
 }
