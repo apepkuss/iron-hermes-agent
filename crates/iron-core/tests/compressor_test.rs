@@ -215,3 +215,121 @@ fn test_prune_old_tool_results_protects_tail() {
     // messages[2] is in the tail, should be untouched
     assert_eq!(messages[2].content.as_deref(), Some(large_content.as_str()));
 }
+
+// ── find_boundaries ──────────────────────────────────────────────────────────
+
+fn make_tool_call_msg(content: &str, call_id: &str) -> Message {
+    Message {
+        role: "assistant".to_string(),
+        content: Some(content.to_string()),
+        tool_calls: Some(vec![ToolCall {
+            id: call_id.to_string(),
+            r#type: "function".to_string(),
+            function: FunctionCall {
+                name: "test".to_string(),
+                arguments: "{}".to_string(),
+            },
+        }]),
+        tool_call_id: None,
+        name: None,
+    }
+}
+
+#[test]
+fn test_find_boundaries_basic() {
+    // 10 messages: protect_first_n=3, verify head >= 3, tail < len, middle exists
+    let compressor = ContextCompressor::new(make_config(100_000, 0.65, 0.20));
+    let messages: Vec<Message> = (0..10)
+        .map(|i| {
+            if i % 2 == 0 {
+                make_message("user", &"hello world ".repeat(50))
+            } else {
+                make_message("assistant", &"response here ".repeat(50))
+            }
+        })
+        .collect();
+
+    let boundary = compressor.find_boundaries(&messages);
+    // head must include at least protect_first_n=3 messages
+    assert!(boundary.head_end >= 3, "head_end={}", boundary.head_end);
+    // tail must not include all messages
+    assert!(
+        boundary.tail_start < messages.len(),
+        "tail_start={}",
+        boundary.tail_start
+    );
+    // there must be a compressible middle
+    assert!(
+        boundary.head_end < boundary.tail_start,
+        "no middle: head_end={} tail_start={}",
+        boundary.head_end,
+        boundary.tail_start
+    );
+}
+
+#[test]
+fn test_find_boundaries_tool_pair_not_split() {
+    // Messages structured so that the natural tail boundary would land on a tool result.
+    // The alignment step should walk back to include the assistant tool_call message too.
+    //
+    // Layout (protect_first_n=3):
+    //   0: user
+    //   1: assistant
+    //   2: user
+    //   3: assistant (tool_call)
+    //   4: tool result
+    //   5: assistant (tail)
+    //   6: user (tail)
+    let compressor = ContextCompressor::new(make_config(100_000, 0.65, 0.05));
+    let messages = vec![
+        make_message("user", "msg0"),
+        make_message("assistant", "msg1"),
+        make_message("user", "msg2"),
+        make_tool_call_msg("calling tool", "call_1"),
+        make_tool_result("tool output", "call_1"),
+        make_message("assistant", "after tool"),
+        make_message("user", "last question"),
+    ];
+
+    let boundary = compressor.find_boundaries(&messages);
+    // If the boundary is compressible, the tail must not start in the middle of a
+    // tool_call / tool pair — i.e. tail_start must not point to a "tool" message
+    // while the previous message is an assistant with tool_calls.
+    if boundary.head_end < boundary.tail_start {
+        let ts = boundary.tail_start;
+        // tail_start must not be a "tool" message whose predecessor is an "assistant"
+        // with tool_calls (that would split the pair).
+        if messages[ts].role == "tool" {
+            assert!(
+                ts == 0 || messages[ts - 1].tool_calls.is_none(),
+                "tail boundary splits a tool_call/tool pair at index {}",
+                ts
+            );
+        }
+    }
+}
+
+#[test]
+fn test_find_boundaries_too_few_messages() {
+    // Only 5 messages with protect_first_n=3: not enough for a compressible middle.
+    // Need at least protect_first_n + 4 = 7 messages.
+    let compressor = ContextCompressor::new(make_config(100_000, 0.65, 0.20));
+    let messages: Vec<Message> = (0..5)
+        .map(|i| {
+            if i % 2 == 0 {
+                make_message("user", "hello")
+            } else {
+                make_message("assistant", "world")
+            }
+        })
+        .collect();
+
+    let boundary = compressor.find_boundaries(&messages);
+    // No compressible middle: head_end >= tail_start
+    assert!(
+        boundary.head_end >= boundary.tail_start,
+        "expected no compressible middle but got head_end={} tail_start={}",
+        boundary.head_end,
+        boundary.tail_start
+    );
+}

@@ -29,6 +29,15 @@ pub struct ContextCompressor {
     pub summary_cooldown_until: Option<Instant>,
 }
 
+/// Describes the head/tail protection boundaries for a compression pass.
+#[derive(Debug, Clone)]
+pub struct CompressionBoundary {
+    /// Index of the first message NOT in the protected head (exclusive upper bound of head).
+    pub head_end: usize,
+    /// Index of the first message in the protected tail (inclusive lower bound of tail).
+    pub tail_start: usize,
+}
+
 /// Tool-result messages longer than this (in chars) are candidates for pruning.
 pub const TOOL_RESULT_PRUNE_THRESHOLD: usize = 200;
 /// Placeholder inserted when an old tool output is pruned.
@@ -113,5 +122,92 @@ impl ContextCompressor {
                 msg.content = Some(PRUNED_PLACEHOLDER.to_string());
             }
         }
+    }
+
+    /// Phase 2: Determine head/tail protection boundaries for a compression pass.
+    ///
+    /// Returns a [`CompressionBoundary`] where `head_end >= tail_start` signals that there
+    /// is no compressible middle (too few messages).
+    pub fn find_boundaries(&self, messages: &[Message]) -> CompressionBoundary {
+        let n = messages.len();
+        let protect_first_n = self.config.protect_first_n;
+        // Minimum message count: protect_first_n + 3 (middle) + 1 (tail) = protect_first_n + 4
+        // The spec says "< protect_first_n + 3 + 1" — interpret as strict: need at least
+        // protect_first_n + 4 messages for any compressible middle to exist.
+        if n < protect_first_n + 4 {
+            // No compressible middle — signal with head_end == n
+            return CompressionBoundary {
+                head_end: n,
+                tail_start: n,
+            };
+        }
+
+        // ── Head boundary ──────────────────────────────────────────────────────
+        // Start at protect_first_n, then skip forward past any orphan tool results
+        // (tool messages that appear right at the head boundary without a preceding
+        // assistant message already in the head).
+        let mut head_end = protect_first_n;
+        while head_end < n && messages[head_end].role == "tool" {
+            head_end += 1;
+        }
+
+        // ── Tail boundary ──────────────────────────────────────────────────────
+        // Walk backward from the end, accumulating tokens, until we have at least
+        // 3 messages AND >= tail_token_budget tokens, or we exceed the soft ceiling.
+        // Never walk past head_end + 1 so there is always at least one middle message.
+        let budget = self.tail_token_budget();
+        let soft_ceiling = (budget as f64 * 1.5) as u64;
+        let mut accumulated: u64 = 0;
+        let mut tail_count: usize = 0;
+        // Default tail_start: last 3 messages (minimum tail), bounded by head_end + 1.
+        let min_tail_start = (head_end + 1).min(n.saturating_sub(3));
+        let mut tail_start = n.saturating_sub(3).max(head_end + 1);
+
+        for i in (min_tail_start..n).rev() {
+            let tokens = Self::estimate_message_tokens(&messages[i]);
+            accumulated += tokens;
+            tail_count += 1;
+            tail_start = i;
+
+            // Stop if we have at least 3 messages AND met the budget
+            if tail_count >= 3 && accumulated >= budget {
+                break;
+            }
+            // Stop if we exceeded the soft ceiling with at least 3 messages
+            if accumulated > soft_ceiling && tail_count >= 3 {
+                break;
+            }
+        }
+
+        // ── Align tail_start backward to avoid splitting tool_call / tool pairs ──
+        tail_start = Self::align_boundary_backward(messages, tail_start, head_end);
+
+        // If there is no compressible middle, return the "no-op" signal.
+        if head_end >= tail_start {
+            CompressionBoundary {
+                head_end: n,
+                tail_start: n,
+            }
+        } else {
+            CompressionBoundary {
+                head_end,
+                tail_start,
+            }
+        }
+    }
+
+    /// Walk `start` backward past any leading "tool" messages so that the boundary
+    /// lands on the assistant message that issued the tool calls, keeping the
+    /// assistant+tool pair intact in the tail.
+    ///
+    /// Will not move below `min_start`.
+    pub fn align_boundary_backward(messages: &[Message], start: usize, min_start: usize) -> usize {
+        let mut pos = start;
+        while pos > min_start && messages[pos].role == "tool" {
+            pos -= 1;
+        }
+        // If we landed on an assistant message that has tool_calls, include it
+        // (pos is already pointing at it, so the tail includes it). Done.
+        pos
     }
 }
