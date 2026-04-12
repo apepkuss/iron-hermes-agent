@@ -451,13 +451,13 @@ async fn test_effectiveness_multi_round_compression() {
 #[ignore] // Requires running LLM backend: cargo test -- --ignored
 async fn test_summary_contains_key_information() {
     let config = CompressorConfig {
-        context_length: 2000,
-        threshold: 0.50,
-        target_ratio: 0.20,
+        context_length: 100_000,
+        threshold: 0.01, // very low threshold to force compression
+        target_ratio: 0.10,
         protect_first_n: 2,
         auxiliary_llm: Some(AuxiliaryLlmConfig {
             base_url: "http://localhost:9068/v1".to_string(),
-            model: "mlx-community/Qwen3-4B-4bit".to_string(),
+            model: "mlx-community/Qwen3-8B-4bit".to_string(),
         }),
     };
     let mut compressor = ContextCompressor::new(config);
@@ -519,13 +519,13 @@ async fn test_summary_contains_key_information() {
 #[ignore] // Requires running LLM backend
 async fn test_summary_preserves_decisions() {
     let config = CompressorConfig {
-        context_length: 2000,
-        threshold: 0.50,
-        target_ratio: 0.20,
+        context_length: 100_000,
+        threshold: 0.01,
+        target_ratio: 0.10,
         protect_first_n: 2,
         auxiliary_llm: Some(AuxiliaryLlmConfig {
             base_url: "http://localhost:9068/v1".to_string(),
-            model: "mlx-community/Qwen3-4B-4bit".to_string(),
+            model: "mlx-community/Qwen3-8B-4bit".to_string(),
         }),
     };
     let mut compressor = ContextCompressor::new(config);
