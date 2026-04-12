@@ -467,3 +467,120 @@ fn test_assemble_without_summary() {
         "no message should contain COMPACTION_PREFIX when summary is None"
     );
 }
+
+// ── compress (async) ─────────────────────────────────────────────────────────
+
+/// Build a simple alternating user/assistant conversation with `n` messages,
+/// each with content of the given char repeated `content_len` times.
+fn make_conversation(n: usize, content_len: usize) -> Vec<Message> {
+    (0..n)
+        .map(|i| {
+            if i % 2 == 0 {
+                make_message("user", &"u".repeat(content_len))
+            } else {
+                make_message("assistant", &"a".repeat(content_len))
+            }
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn test_compress_without_auxiliary_llm() {
+    // Config with no auxiliary LLM — summary generation is skipped.
+    let config = CompressorConfig {
+        context_length: 100_000,
+        threshold: 0.65,
+        target_ratio: 0.20,
+        protect_first_n: 3,
+        auxiliary_llm: None,
+    };
+    let mut compressor = ContextCompressor::new(config);
+
+    // Build 12 alternating messages with enough content to form a compressible middle.
+    let messages = make_conversation(12, 50);
+    let original_len = messages.len();
+
+    let result = compressor.compress(&messages, 70_000).await;
+
+    // compression_count should have been incremented
+    assert_eq!(compressor.compression_count(), 1);
+    // Result must have fewer (or equal, if boundaries collapse) messages than input
+    assert!(
+        result.len() <= original_len,
+        "compressed result ({}) should be <= original ({})",
+        result.len(),
+        original_len
+    );
+    // Head (first 3 messages) must be preserved intact
+    for i in 0..3 {
+        assert_eq!(
+            result[i].content, messages[i].content,
+            "head message {i} should be preserved"
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_compress_preserves_tool_pairs() {
+    // Verify that after compression, no orphan tool results or unmatched calls remain.
+    let config = CompressorConfig {
+        context_length: 100_000,
+        threshold: 0.65,
+        target_ratio: 0.20,
+        protect_first_n: 3,
+        auxiliary_llm: None,
+    };
+    let mut compressor = ContextCompressor::new(config);
+
+    // Build a conversation: 3 head messages, then a tool_call + result in the middle,
+    // then 4 tail messages — total 10 messages.
+    let mut messages = make_conversation(3, 20); // head
+    // Middle: assistant with tool_call + matching tool result
+    messages.push(make_tool_call_message("call_mid", "search"));
+    messages.push(make_tool_result("search results here", "call_mid"));
+    // More middle
+    messages.push(make_message("assistant", "processed"));
+    // Tail
+    messages.extend(make_conversation(4, 20));
+
+    let result = compressor.compress(&messages, 70_000).await;
+
+    // Collect all call IDs produced by assistant tool_calls in result
+    let call_ids: std::collections::HashSet<String> = result
+        .iter()
+        .filter_map(|m| m.tool_calls.as_deref())
+        .flatten()
+        .map(|tc| tc.id.clone())
+        .collect();
+
+    // Every tool result message must have a matching call
+    for msg in &result {
+        if msg.role == "tool" {
+            if let Some(ref id) = msg.tool_call_id {
+                assert!(
+                    call_ids.contains(id),
+                    "tool result references unknown call_id={id}"
+                );
+            }
+        }
+    }
+
+    // Every tool_call must have a matching tool result
+    let result_ids: std::collections::HashSet<String> = result
+        .iter()
+        .filter(|m| m.role == "tool")
+        .filter_map(|m| m.tool_call_id.clone())
+        .collect();
+
+    for msg in &result {
+        if let Some(tool_calls) = msg.tool_calls.as_deref() {
+            for tc in tool_calls {
+                assert!(
+                    result_ids.contains(&tc.id),
+                    "tool_call id={} has no matching tool result",
+                    tc.id
+                );
+            }
+        }
+    }
+}

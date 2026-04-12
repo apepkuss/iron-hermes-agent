@@ -1,5 +1,6 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use crate::auxiliary_client::AuxiliaryClient;
 use crate::llm::types::Message;
 
 /// Prefix inserted before a generated context summary.
@@ -321,5 +322,136 @@ impl ContextCompressor {
 
         result.extend_from_slice(tail);
         result
+    }
+
+    /// Full four-phase compression.
+    ///
+    /// Returns the compressed message list. If there is not enough middle content
+    /// to compress, returns a clone of the original messages unchanged.
+    pub async fn compress(&mut self, messages: &[Message], _current_tokens: u64) -> Vec<Message> {
+        self.compression_count += 1;
+
+        let mut msgs: Vec<Message> = messages.to_vec();
+
+        // Phase 2: determine head/tail boundaries
+        let boundary = self.find_boundaries(&msgs);
+
+        // If head_end >= tail_start there is no compressible middle
+        if boundary.head_end >= boundary.tail_start {
+            return msgs;
+        }
+
+        let head_end = boundary.head_end;
+        let tail_start = boundary.tail_start;
+
+        // Phase 1: prune old tool results in the compressible zone
+        Self::prune_old_tool_results(&mut msgs, tail_start);
+
+        // Split into head / middle / tail slices
+        let head = msgs[..head_end].to_vec();
+        let middle = msgs[head_end..tail_start].to_vec();
+        let tail = msgs[tail_start..].to_vec();
+
+        // Phase 3: try to generate a summary for the middle
+        let summary = self.try_generate_summary(&middle).await;
+
+        // Remember the new summary text for future incremental updates
+        if let Some(ref s) = summary {
+            self.previous_summary = Some(s.clone());
+        }
+
+        // Phase 4b: assemble
+        let mut result = self.assemble(&head, summary, &tail);
+
+        // Phase 4a: sanitize tool pairs in the assembled result
+        Self::sanitize_tool_pairs(&mut result);
+
+        result
+    }
+
+    /// Try to generate a summary via the auxiliary LLM.
+    ///
+    /// Returns `None` when:
+    /// - No auxiliary LLM is configured.
+    /// - The compressor is on cooldown after a previous failure.
+    /// - The API call fails (in which case a cooldown is set).
+    async fn try_generate_summary(&mut self, middle: &[Message]) -> Option<String> {
+        // Check cooldown
+        if let Some(until) = self.summary_cooldown_until
+            && Instant::now() < until
+        {
+            return None;
+        }
+
+        // Need an auxiliary LLM config
+        let aux_config = self.config.auxiliary_llm.clone()?;
+
+        let conversation_text = Self::prepare_middle_text(middle);
+
+        // Calculate token budget for the summary
+        let middle_tokens: u64 = middle.iter().map(Self::estimate_message_tokens).sum();
+        let summary_budget = ((middle_tokens as f64 * SUMMARY_RATIO) as u64)
+            .clamp(MIN_SUMMARY_TOKENS, MAX_SUMMARY_TOKENS)
+            .min((self.config.context_length as f64 * 0.05) as u64);
+
+        let client = AuxiliaryClient::new(aux_config.base_url, aux_config.model);
+
+        match client
+            .generate_summary(
+                &conversation_text,
+                summary_budget as u32,
+                self.previous_summary.as_deref(),
+            )
+            .await
+        {
+            Ok(summary) => Some(summary),
+            Err(_) => {
+                // Set cooldown on failure
+                self.summary_cooldown_until =
+                    Some(Instant::now() + Duration::from_secs(SUMMARY_FAILURE_COOLDOWN_SECS));
+                None
+            }
+        }
+    }
+
+    /// Prepare middle messages as a human-readable text block for the summariser.
+    ///
+    /// Long content is truncated: content > 6000 chars keeps the first 4000 and last 1500;
+    /// tool arguments > 1500 chars are truncated to 1500.
+    pub fn prepare_middle_text(messages: &[Message]) -> String {
+        messages
+            .iter()
+            .map(|msg| {
+                let mut parts: Vec<String> = Vec::new();
+
+                // Role + content
+                let content = msg.content.as_deref().unwrap_or("");
+                let truncated_content = if content.len() > 6000 {
+                    format!(
+                        "{}... [truncated] ...{}",
+                        &content[..4000],
+                        &content[content.len() - 1500..]
+                    )
+                } else {
+                    content.to_string()
+                };
+                parts.push(format!("[{}]: {}", msg.role, truncated_content));
+
+                // Append tool calls
+                if let Some(tool_calls) = msg.tool_calls.as_deref() {
+                    for tc in tool_calls {
+                        let args = if tc.function.arguments.len() > 1500 {
+                            format!("{}... [truncated]", &tc.function.arguments[..1500])
+                        } else {
+                            tc.function.arguments.clone()
+                        };
+                        parts.push(format!("-> {}({})", tc.function.name, args));
+                    }
+                }
+
+                parts.join("\n")
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n")
     }
 }
