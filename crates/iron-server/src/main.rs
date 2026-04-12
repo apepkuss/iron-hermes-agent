@@ -1,7 +1,3 @@
-mod config;
-mod routes;
-mod state;
-
 use std::sync::Arc;
 
 use axum::Router;
@@ -9,14 +5,14 @@ use axum::routing::{get, post};
 use tokio::net::TcpListener;
 use tracing::info;
 
-use config::ServerConfig;
-use routes::chat::chat_completions;
-use routes::config_api::{get_config, update_config};
-use routes::health::health;
-use routes::models::{list_models, list_provider_models};
-use routes::models_status::models_status;
-use routes::static_files;
-use state::build_app_state;
+use iron_server::config::ServerConfig;
+use iron_server::routes::chat::chat_completions;
+use iron_server::routes::config_api::{get_config, update_config};
+use iron_server::routes::health::health;
+use iron_server::routes::models::{list_models, list_provider_models};
+use iron_server::routes::models_status::models_status;
+use iron_server::routes::static_files;
+use iron_server::state::build_app_state;
 
 #[tokio::main]
 async fn main() {
