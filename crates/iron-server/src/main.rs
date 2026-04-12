@@ -11,8 +11,10 @@ use tracing::info;
 
 use config::ServerConfig;
 use routes::chat::chat_completions;
+use routes::config_api::{get_config, update_config};
 use routes::health::health;
 use routes::models::{list_models, list_provider_models};
+use routes::models_status::models_status;
 use routes::static_files;
 use state::build_app_state;
 
@@ -37,6 +39,8 @@ async fn main() {
         .route("/v1/models", get(list_models))
         .route("/v1/provider/models", get(list_provider_models))
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/api/config", get(get_config).post(update_config))
+        .route("/api/models/status", get(models_status))
         .with_state(state);
 
     let listener = TcpListener::bind(&addr).await.unwrap();

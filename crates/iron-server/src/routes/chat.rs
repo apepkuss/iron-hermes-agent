@@ -12,6 +12,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use iron_core::agent::{Agent, AgentConfig, SessionState, StreamCallback};
+use iron_core::context_compressor::{AuxiliaryLlmConfig, CompressorConfig};
 use iron_core::llm::client::{LlmClient, LlmConfig};
 use iron_core::llm::types::Message;
 
@@ -58,6 +59,26 @@ pub async fn chat_completions(
     } else {
         handle_non_streaming(state, payload).await
     }
+}
+
+/// Build a [`CompressorConfig`] from the current [`RuntimeConfig`].
+///
+/// Returns `None` when `compression_threshold` is zero (compression disabled).
+fn build_compressor_config(rc: &crate::config::RuntimeConfig) -> Option<CompressorConfig> {
+    if rc.compression_threshold <= 0.0 {
+        return None;
+    }
+    let context_length = rc.context_length_override.unwrap_or(128_000);
+    Some(CompressorConfig {
+        context_length,
+        threshold: rc.compression_threshold,
+        target_ratio: 0.20,
+        protect_first_n: 3,
+        auxiliary_llm: rc.auxiliary_model.as_ref().map(|m| AuxiliaryLlmConfig {
+            base_url: rc.llm_base_url.clone(),
+            model: m.clone(),
+        }),
+    })
 }
 
 /// Build an `LlmClient` from the server config, optionally overriding the model.
@@ -108,8 +129,15 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
     };
 
     let llm_client = make_llm_client(&state, payload.model.as_deref());
+
+    let compressor_config = {
+        let rc = state.runtime_config.read().await;
+        build_compressor_config(&rc)
+    };
+
     let agent_config = AgentConfig {
         model_name: state.config.model_name.clone(),
+        compressor_config,
         ..AgentConfig::default()
     };
 
@@ -192,6 +220,11 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
     let model_name_clone = model_name.clone();
 
+    let compressor_config = {
+        let rc = state.runtime_config.read().await;
+        build_compressor_config(&rc)
+    };
+
     // Spawn the agent loop in a background task.
     tokio::spawn(async move {
         let llm_client = make_llm_client(&state, model_override.as_deref());
@@ -201,6 +234,7 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
         let agent_config = AgentConfig {
             model_name: model_name_clone,
+            compressor_config,
             ..AgentConfig::default()
         };
 

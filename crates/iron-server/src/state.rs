@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 
 use iron_memory::manager::MemoryManager;
 use iron_memory::tool_module::MemoryTools;
@@ -10,13 +10,14 @@ use iron_skills::tool_module::SkillTools;
 use iron_tool_api::{ToolModule, ToolRegistry};
 use iron_tools::{file_module::FileTools, terminal_module::TerminalTools, web_module::WebTools};
 
-use crate::config::ServerConfig;
+use crate::config::{RuntimeConfig, ServerConfig};
 
 pub struct AppState {
     pub config: ServerConfig,
     pub tool_registry: Arc<ToolRegistry>,
     pub memory_manager: Arc<Mutex<MemoryManager>>,
     pub skill_manager: Arc<SkillManager>,
+    pub runtime_config: Arc<RwLock<RuntimeConfig>>,
 }
 
 pub fn build_app_state(config: ServerConfig) -> AppState {
@@ -58,10 +59,20 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
 
     let tool_registry = Arc::new(registry);
 
+    // Runtime config — initialized from ServerConfig, mutable via /api/config
+    let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
+        llm_base_url: config.llm_base_url.clone(),
+        llm_model: config.llm_model.clone(),
+        auxiliary_model: config.auxiliary_model.clone(),
+        compression_threshold: config.compression_threshold,
+        context_length_override: config.context_length_override,
+    }));
+
     AppState {
         config,
         tool_registry,
         memory_manager,
         skill_manager,
+        runtime_config,
     }
 }

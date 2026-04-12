@@ -234,19 +234,18 @@ impl Agent {
             }
 
             // Context compression check.
-            if let Some(ref mut compressor) = self.context_compressor {
-                if let Some(ref usage) = response.usage {
-                    if compressor.should_compress(usage.prompt_tokens as u64) {
-                        debug!(
-                            "Context compression triggered at {} prompt tokens",
-                            usage.prompt_tokens
-                        );
-                        session.messages = compressor
-                            .compress(&session.messages, usage.prompt_tokens as u64)
-                            .await;
-                        session.system_prompt = Some(self.build_system_prompt(session));
-                    }
-                }
+            if let Some(ref mut compressor) = self.context_compressor
+                && let Some(ref usage) = response.usage
+                && compressor.should_compress(usage.prompt_tokens as u64)
+            {
+                debug!(
+                    "Context compression triggered at {} prompt tokens",
+                    usage.prompt_tokens
+                );
+                session.messages = compressor
+                    .compress(&session.messages, usage.prompt_tokens as u64)
+                    .await;
+                session.system_prompt = Some(self.build_system_prompt(session));
             }
 
             // d. Parse response — extract assistant message.
