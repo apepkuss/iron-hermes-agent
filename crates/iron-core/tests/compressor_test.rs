@@ -1,7 +1,27 @@
 use iron_core::{
-    context_compressor::{CompressorConfig, ContextCompressor},
+    context_compressor::{CompressorConfig, ContextCompressor, PRUNED_PLACEHOLDER},
     llm::types::{FunctionCall, Message, ToolCall},
 };
+
+fn make_message(role: &str, content: &str) -> Message {
+    Message {
+        role: role.to_string(),
+        content: Some(content.to_string()),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+    }
+}
+
+fn make_tool_result(content: &str, call_id: &str) -> Message {
+    Message {
+        role: "tool".to_string(),
+        content: Some(content.to_string()),
+        tool_calls: None,
+        tool_call_id: Some(call_id.to_string()),
+        name: Some("test_tool".to_string()),
+    }
+}
 
 fn make_config(context_length: u64, threshold: f64, target_ratio: f64) -> CompressorConfig {
     CompressorConfig {
@@ -148,4 +168,50 @@ fn test_estimate_message_tokens_empty() {
     };
     // only overhead
     assert_eq!(ContextCompressor::estimate_message_tokens(&msg), 10);
+}
+
+// ── prune_old_tool_results ───────────────────────────────────────────────────
+
+#[test]
+fn test_prune_old_tool_results_replaces_large() {
+    // tool result >200 chars before tail_start gets replaced with placeholder
+    let large_content = "x".repeat(201);
+    let mut messages = vec![
+        make_message("user", "hello"),
+        make_tool_result(&large_content, "call_1"),
+        make_message("assistant", "done"),
+    ];
+    // tail_start beyond all messages — all are in the prune zone
+    ContextCompressor::prune_old_tool_results(&mut messages, 10);
+    assert_eq!(messages[1].content.as_deref(), Some(PRUNED_PLACEHOLDER));
+}
+
+#[test]
+fn test_prune_old_tool_results_keeps_small() {
+    // tool result <=200 chars should NOT be replaced
+    let small_content = "x".repeat(200);
+    let mut messages = vec![
+        make_message("user", "hello"),
+        make_tool_result(&small_content, "call_1"),
+        make_message("assistant", "done"),
+    ];
+    ContextCompressor::prune_old_tool_results(&mut messages, 10);
+    assert_eq!(messages[1].content.as_deref(), Some(small_content.as_str()));
+}
+
+#[test]
+fn test_prune_old_tool_results_protects_tail() {
+    // tool result in tail (>= tail_start) is NOT replaced even if large
+    let large_content = "x".repeat(201);
+    let mut messages = vec![
+        make_message("user", "hello"),
+        make_message("assistant", "thinking"),
+        // index 2 — tail starts here
+        make_tool_result(&large_content, "call_1"),
+        make_message("assistant", "done"),
+    ];
+    // tail_start = 2, so only messages[0..2] are in the prune zone
+    ContextCompressor::prune_old_tool_results(&mut messages, 2);
+    // messages[2] is in the tail, should be untouched
+    assert_eq!(messages[2].content.as_deref(), Some(large_content.as_str()));
 }

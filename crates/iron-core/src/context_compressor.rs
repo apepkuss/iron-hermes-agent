@@ -101,4 +101,17 @@ impl ContextCompressor {
     pub fn compression_count(&self) -> u32 {
         self.compression_count
     }
+
+    /// Phase 1: Replace old tool results (before tail_start) exceeding 200 chars with placeholder.
+    pub fn prune_old_tool_results(messages: &mut [Message], tail_start: usize) {
+        let boundary = tail_start.min(messages.len());
+        for msg in &mut messages[..boundary] {
+            if msg.role == "tool"
+                && let Some(ref content) = msg.content
+                && content.len() > TOOL_RESULT_PRUNE_THRESHOLD
+            {
+                msg.content = Some(PRUNED_PLACEHOLDER.to_string());
+            }
+        }
+    }
 }
