@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRON HERMES</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/marked@15.0.0/marked.min.js"></script>
 <style>
 *, *::before, *::after {
   box-sizing: border-box;
@@ -555,6 +559,87 @@ html, body {
   color: #E0E0E0;
 }
 
+.message-content ul,
+.message-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.message-content li {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.message-content li > ul,
+.message-content li > ol {
+  margin: 2px 0;
+}
+
+.message-content h1,
+.message-content h2,
+.message-content h3,
+.message-content h4 {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.message-content h1 { font-size: 18px; }
+.message-content h2 { font-size: 16px; }
+.message-content h3 { font-size: 15px; }
+.message-content h4 { font-size: 14px; opacity: 0.8; }
+
+.message-content h1:first-child,
+.message-content h2:first-child,
+.message-content h3:first-child {
+  margin-top: 0;
+}
+
+.message-content blockquote {
+  border-left: 3px solid var(--border);
+  padding: 4px 12px;
+  margin: 8px 0;
+  color: #666;
+}
+
+.message-content table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.message-content th,
+.message-content td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.message-content th {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.message-content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+
+.message-content a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.message-content a:hover {
+  text-decoration: underline;
+}
+
+.message-user .message-content a {
+  color: rgba(255,255,255,0.8);
+}
+
 /* ── Loading indicator ── */
 .loading-indicator {
   display: inline-flex;
@@ -572,6 +657,13 @@ html, body {
 
 .loading-dot:nth-child(2) { animation-delay: 0.2s; }
 .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+
+.loading-text {
+  font-size: 12px;
+  color: #999;
+  letter-spacing: 0.05em;
+  margin-left: 4px;
+}
 
 @keyframes pulse {
   0%, 100% { opacity: 0.2; transform: scale(0.8); }
@@ -765,21 +857,30 @@ html, body {
 
 .todo-icon {
   flex-shrink: 0;
-  margin-top: 1px;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 1.5px solid #CCC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .todo-item.pending .todo-icon {
-  color: #CCCCCC;
+  border-color: #CCC;
+  color: transparent;
 }
 
 .todo-item.in_progress .todo-icon {
+  border-color: var(--accent);
   color: var(--accent);
-  animation: toolSpin 1.2s linear infinite;
-  display: inline-block;
 }
 
 .todo-item.completed .todo-icon {
-  color: #333333;
+  border-color: var(--text);
+  color: var(--text);
 }
 
 .todo-item.completed .todo-text {
@@ -1165,34 +1266,37 @@ html, body {
     }
   }
 
-  // ── Markdown rendering ──
+  // ── Markdown + LaTeX rendering ──
   function renderMarkdown(text) {
-    // Escape HTML
-    let html = text
+    // Use marked.js if available, fallback to simple renderer
+    if (typeof marked !== 'undefined') {
+      try {
+        marked.setOptions({
+          breaks: true,
+          gfm: true,
+        });
+        var html = marked.parse(text);
+        return html;
+      } catch (e) {
+        // fallback below
+      }
+    }
+
+    // Simple fallback renderer
+    var html = text
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-
-    // Code blocks: ```lang\n...\n```
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
       return '<pre><code>' + code.replace(/\n$/, '') + '</code></pre>';
     });
-
-    // Inline code
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-    // Bold
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-
-    // Italic
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-    // Split into blocks by double newline for paragraphs, but preserve pre blocks
-    const parts = html.split(/(<pre>[\s\S]*?<\/pre>)/);
+    var parts = html.split(/(<pre>[\s\S]*?<\/pre>)/);
     html = parts.map(function(part) {
       if (part.startsWith('<pre>')) return part;
-      // Convert single newlines to <br> and wrap in paragraphs
-      const paragraphs = part.split(/\n\n+/);
+      var paragraphs = part.split(/\n\n+/);
       return paragraphs.map(function(p) {
         p = p.trim();
         if (!p) return '';
@@ -1200,8 +1304,26 @@ html, body {
         return '<p>' + p + '</p>';
       }).join('');
     }).join('');
-
     return html;
+  }
+
+  // Render LaTeX in an element using KaTeX auto-render
+  function renderLatex(element) {
+    if (typeof renderMathInElement !== 'undefined') {
+      try {
+        renderMathInElement(element, {
+          delimiters: [
+            {left: '$$', right: '$$', display: true},
+            {left: '$', right: '$', display: false},
+            {left: '\\(', right: '\\)', display: false},
+            {left: '\\[', right: '\\]', display: true},
+          ],
+          throwOnError: false,
+        });
+      } catch (e) {
+        // LaTeX rendering failed, ignore
+      }
+    }
   }
 
   // ── Append a message to DOM ──
@@ -1225,6 +1347,7 @@ html, body {
         '<div class="loading-dot"></div>' +
         '<div class="loading-dot"></div>' +
         '<div class="loading-dot"></div>' +
+        '<span class="loading-text">Thinking...</span>' +
         '</div>';
     } else if (role === 'user') {
       // User messages: render as plain text with line breaks
@@ -1232,6 +1355,7 @@ html, body {
       contentDiv.innerHTML = '<p>' + contentDiv.innerHTML.replace(/\n/g, '<br>') + '</p>';
     } else {
       contentDiv.innerHTML = renderMarkdown(content);
+      renderLatex(contentDiv);
     }
 
     div.appendChild(contentDiv);
@@ -1275,6 +1399,7 @@ html, body {
     // Show loading
     const loadingContent = appendMessage('assistant', '', true);
     const assistantDiv = loadingContent.parentElement;
+    currentAssistantDiv = assistantDiv;
 
     setStreaming(true);
     let fullText = '';
@@ -1300,7 +1425,7 @@ html, body {
       }
 
       fullText = '';
-      loadingContent.innerHTML = '';
+      let loadingCleared = false;
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -1334,6 +1459,16 @@ html, body {
           if (data === '[DONE]') continue;
 
           if (currentEvent === 'tool_started') {
+            // Replace "Thinking..." with tool status while tools run
+            if (!loadingCleared) {
+              loadingContent.innerHTML =
+                '<div class="loading-indicator">' +
+                '<div class="loading-dot"></div>' +
+                '<div class="loading-dot"></div>' +
+                '<div class="loading-dot"></div>' +
+                '<span class="loading-text">Calling tools...</span>' +
+                '</div>';
+            }
             try { handleToolStarted(JSON.parse(data)); } catch(e) {}
             currentEvent = null;
           } else if (currentEvent === 'tool_completed') {
@@ -1349,6 +1484,7 @@ html, body {
               const parsed = JSON.parse(data);
               const delta = parsed.choices && parsed.choices[0] && parsed.choices[0].delta;
               if (delta && delta.content) {
+                loadingCleared = true;
                 fullText += delta.content;
                 loadingContent.innerHTML = renderMarkdown(fullText);
                 scrollToBottom();
@@ -1363,6 +1499,7 @@ html, body {
       // Final render
       if (fullText) {
         loadingContent.innerHTML = renderMarkdown(fullText);
+        renderLatex(loadingContent);
         messages.push({ role: 'assistant', content: fullText });
       } else {
         loadingContent.innerHTML = '<p style="color:#999">No response received.</p>';
@@ -1373,6 +1510,7 @@ html, body {
         // User clicked stop — keep whatever was streamed so far
         if (fullText) {
           loadingContent.innerHTML = renderMarkdown(fullText);
+          renderLatex(loadingContent);
           messages.push({ role: 'assistant', content: fullText });
         } else {
           loadingContent.innerHTML = '<p style="color:#999">Stopped.</p>';
@@ -1383,6 +1521,7 @@ html, body {
     }
 
     setStreaming(false);
+    currentAssistantDiv = null;
     scrollToBottom();
   }
 
@@ -1394,6 +1533,7 @@ html, body {
 
   // ── Tool progress handlers ──
   const activeTools = {};
+  let currentAssistantDiv = null; // reference to the current assistant message div (for tool progress insertion)
 
   function handleToolStarted(data) {
     if (emptyState) emptyState.style.display = 'none';
@@ -1404,25 +1544,41 @@ html, body {
       '<span class="tool-spinner">&#9881;</span>' +
       '<span class="tool-name">' + escapeHtml(data.tool) + '</span>' +
       '<span class="tool-args">(' + escapeHtml(data.args_preview) + ')</span>';
-    chatArea.appendChild(div);
-    activeTools[data.call_id] = div;
+    // Insert before the assistant reply div (between user message and reply)
+    if (currentAssistantDiv && currentAssistantDiv.parentNode === chatArea) {
+      chatArea.insertBefore(div, currentAssistantDiv);
+    } else {
+      chatArea.appendChild(div);
+    }
+    activeTools[data.call_id] = { element: div, startTime: Date.now() };
     scrollToBottom();
   }
 
   function handleToolCompleted(data) {
-    const div = activeTools[data.call_id];
-    if (div) {
-      const icon = data.success ? '&#10003;' : '&#10007;';
-      const cls = data.success ? 'tool-done' : 'tool-error';
-      const info = data.success
-        ? (data.duration_ms + 'ms' + (data.result_preview ? ' \u00B7 ' + escapeHtml(data.result_preview) : ''))
-        : escapeHtml(data.result_preview);
-      div.className = 'tool-progress ' + cls;
-      div.innerHTML =
-        '<span class="tool-icon">' + icon + '</span>' +
-        '<span class="tool-name">' + escapeHtml(data.tool) + '</span>' +
-        '<span class="tool-result">' + info + '</span>';
-      delete activeTools[data.call_id];
+    const entry = activeTools[data.call_id];
+    if (entry) {
+      const updateDom = function() {
+        const icon = data.success ? '&#10003;' : '&#10007;';
+        const cls = data.success ? 'tool-done' : 'tool-error';
+        const info = data.success
+          ? (data.duration_ms + 'ms' + (data.result_preview ? ' \u00B7 ' + escapeHtml(data.result_preview) : ''))
+          : escapeHtml(data.result_preview);
+        entry.element.className = 'tool-progress ' + cls;
+        entry.element.innerHTML =
+          '<span class="tool-icon">' + icon + '</span>' +
+          '<span class="tool-name">' + escapeHtml(data.tool) + '</span>' +
+          '<span class="tool-result">' + info + '</span>';
+        delete activeTools[data.call_id];
+      };
+
+      // Ensure ⚙ spinner is visible for at least 300ms
+      const elapsed = Date.now() - entry.startTime;
+      const minVisible = 300;
+      if (elapsed < minVisible) {
+        setTimeout(updateDom, minVisible - elapsed);
+      } else {
+        updateDom();
+      }
     }
   }
 
@@ -1452,8 +1608,8 @@ html, body {
       var statusClass = item.status.replace(/ /g, '_');
       div.className = 'todo-item ' + statusClass;
 
-      var icons = { pending: '&#9675;', in_progress: '&#9881;', completed: '&#10003;' };
-      var icon = icons[item.status] || '&#9675;';
+      var icons = { pending: '', in_progress: '&#10033;', completed: '&#10003;' };
+      var icon = icons[item.status] || '';
 
       div.innerHTML =
         '<span class="todo-icon">' + icon + '</span>' +
