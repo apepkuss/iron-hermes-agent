@@ -11,6 +11,7 @@ use iron_server::routes::config_api::{get_config, update_config};
 use iron_server::routes::health::health;
 use iron_server::routes::models::{list_models, list_provider_models};
 use iron_server::routes::models_status::models_status;
+use iron_server::routes::session::reset_session;
 use iron_server::routes::static_files;
 use iron_server::state::build_app_state;
 
@@ -37,6 +38,7 @@ async fn main() {
         .route("/v1/chat/completions", post(chat_completions))
         .route("/api/config", get(get_config).post(update_config))
         .route("/api/models/status", get(models_status))
+        .route("/api/session/reset", post(reset_session))
         .with_state(state);
 
     let listener = TcpListener::bind(&addr).await.unwrap();

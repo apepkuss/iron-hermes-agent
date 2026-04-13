@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 
 use tokio::sync::{Mutex, RwLock};
 
+use iron_core::runtime::{AgentRuntime, RuntimeConfig as CoreRuntimeConfig};
 use iron_memory::manager::MemoryManager;
 use iron_memory::tool_module::MemoryTools;
 use iron_sandbox::tool_module::register_execute_code;
@@ -15,10 +16,11 @@ use crate::config::{RuntimeConfig, ServerConfig};
 
 pub struct AppState {
     pub config: ServerConfig,
+    pub runtime: Arc<AgentRuntime>,
+    pub runtime_config: Arc<RwLock<RuntimeConfig>>,
     pub tool_registry: Arc<ToolRegistry>,
     pub memory_manager: Arc<Mutex<MemoryManager>>,
     pub skill_manager: Arc<SkillManager>,
-    pub runtime_config: Arc<RwLock<RuntimeConfig>>,
 }
 
 pub fn build_app_state(config: ServerConfig) -> AppState {
@@ -84,11 +86,30 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         session_idle_timeout_secs: 1800,
     }));
 
+    // AgentRuntime — central session management and agent caching
+    let core_runtime_config = CoreRuntimeConfig {
+        agent_timeout_secs: config.agent_timeout_secs,
+        inactivity_timeout_secs: 300,
+        session_idle_timeout_secs: 1800,
+        fallback_model: config.fallback_model.clone(),
+        llm_base_url: config.llm_base_url.clone(),
+        llm_api_key: config.llm_api_key.clone(),
+        llm_model: config.llm_model.clone(),
+    };
+
+    let runtime = Arc::new(AgentRuntime::new(
+        core_runtime_config,
+        Arc::clone(&tool_registry),
+        Arc::clone(&memory_manager),
+        Arc::clone(&skill_manager),
+    ));
+
     AppState {
         config,
+        runtime,
+        runtime_config,
         tool_registry,
         memory_manager,
         skill_manager,
-        runtime_config,
     }
 }

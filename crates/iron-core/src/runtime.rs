@@ -221,12 +221,18 @@ impl AgentRuntime {
     ///
     /// Returns [`CoreError::AgentBusy`] immediately if the session already has
     /// an active agent call in flight.
+    ///
+    /// `conversation_history` — when non-empty, the messages are loaded into
+    /// the agent before the user message is sent.  This supports the
+    /// OpenAI-compatible pattern where the client resends the full message
+    /// history on every request.
     pub async fn handle_message(
         &self,
         source: &SessionSource,
         user_message: String,
         agent_config: AgentConfig,
         event_callback: Option<EventCallback>,
+        conversation_history: Vec<crate::llm::types::Message>,
     ) -> Result<AgentResponse, CoreError> {
         let key = build_session_key(source);
 
@@ -246,7 +252,14 @@ impl AgentRuntime {
 
         // 3. Execute and always clean up the running slot.
         let result = self
-            .execute_message(source, &key, user_message, agent_config, event_callback)
+            .execute_message(
+                source,
+                &key,
+                user_message,
+                agent_config,
+                event_callback,
+                conversation_history,
+            )
             .await;
 
         self.running.write().await.remove(&key);
@@ -263,6 +276,7 @@ impl AgentRuntime {
         user_message: String,
         agent_config: AgentConfig,
         event_callback: Option<EventCallback>,
+        conversation_history: Vec<crate::llm::types::Message>,
     ) -> Result<AgentResponse, CoreError> {
         // 1. Ensure session exists.
         let session_entry = self.get_or_create_session(source).await;
@@ -275,6 +289,13 @@ impl AgentRuntime {
 
         // Load the session id into the agent.
         agent.set_session_id(session_entry.session_id.clone());
+
+        // 3a. If conversation history was provided, load it into the agent.
+        //     This supports the OpenAI-compatible pattern where the client
+        //     resends all prior messages on every request.
+        if !conversation_history.is_empty() {
+            agent.load_history(conversation_history);
+        }
 
         // 3. Mark as actively running.
         self.running

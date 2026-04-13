@@ -170,7 +170,7 @@ async fn test_handle_message_creates_session() {
     // The call will fail because there is no real LLM, but the session should
     // have been created before the LLM call is attempted.
     let _ = runtime
-        .handle_message(&source, "hello".to_string(), config, None)
+        .handle_message(&source, "hello".to_string(), config, None, vec![])
         .await;
 
     // Session must exist now.
@@ -193,7 +193,7 @@ async fn test_handle_message_concurrent_rejected() {
 
     let config = AgentConfig::default();
     let result = runtime
-        .handle_message(&source, "hello".to_string(), config, None)
+        .handle_message(&source, "hello".to_string(), config, None, vec![])
         .await;
 
     assert!(

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::Json;
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
@@ -11,11 +11,11 @@ use tokio::sync::mpsc;
 use tracing::error;
 use uuid::Uuid;
 
-use iron_core::agent::{Agent, AgentConfig};
+use iron_core::agent::AgentConfig;
 use iron_core::context_compressor::{AuxiliaryLlmConfig, CompressorConfig};
-use iron_core::event::{AgentEvent, EventCallback};
-use iron_core::llm::client::{LlmClient, LlmConfig};
+use iron_core::event::AgentEvent;
 use iron_core::llm::types::Message;
+use iron_core::runtime::SessionSource;
 
 use crate::state::AppState;
 
@@ -40,9 +40,38 @@ pub struct ChatMessage {
     pub content: Option<String>,
 }
 
+/// Extract a [`SessionSource`] from HTTP request headers.
+///
+/// Falls back to sensible defaults when headers are absent, so plain
+/// OpenAI-compatible clients (which don't set these headers) still work.
+pub fn extract_session_source(headers: &HeaderMap) -> SessionSource {
+    SessionSource {
+        platform: headers
+            .get("X-Platform")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("webui")
+            .to_string(),
+        chat_id: headers
+            .get("X-Chat-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("default")
+            .to_string(),
+        user_id: headers
+            .get("X-User-Id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("local")
+            .to_string(),
+        thread_id: headers
+            .get("X-Thread-Id")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from),
+    }
+}
+
 /// POST `/v1/chat/completions`
 pub async fn chat_completions(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(payload): Json<ChatRequest>,
 ) -> Response {
     if payload.messages.is_empty() {
@@ -56,9 +85,9 @@ pub async fn chat_completions(
     let is_stream = payload.stream.unwrap_or(false);
 
     if is_stream {
-        handle_streaming(state, payload).await
+        handle_streaming(state, headers, payload).await
     } else {
-        handle_non_streaming(state, payload).await
+        handle_non_streaming(state, headers, payload).await
     }
 }
 
@@ -79,19 +108,6 @@ fn build_compressor_config(rc: &crate::config::RuntimeConfig) -> Option<Compress
             base_url: rc.llm_base_url.clone(),
             model: m.clone(),
         }),
-    })
-}
-
-/// Build an `LlmClient` from the server config, optionally overriding the model.
-fn make_llm_client(state: &AppState, model_override: Option<&str>) -> LlmClient {
-    LlmClient::new(LlmConfig {
-        base_url: state.config.llm_base_url.clone(),
-        api_key: state.config.llm_api_key.clone(),
-        model: model_override
-            .unwrap_or(&state.config.llm_model)
-            .to_string(),
-        temperature: None,
-        max_tokens: None,
     })
 }
 
@@ -117,7 +133,11 @@ fn last_user_message(msgs: &[ChatMessage]) -> Option<String> {
 }
 
 /// Non-streaming handler.
-async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Response {
+async fn handle_non_streaming(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    payload: ChatRequest,
+) -> Response {
     let user_msg = match last_user_message(&payload.messages) {
         Some(m) => m,
         None => {
@@ -129,7 +149,7 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
         }
     };
 
-    let llm_client = make_llm_client(&state, payload.model.as_deref());
+    let source = extract_session_source(&headers);
 
     let compressor_config = {
         let rc = state.runtime_config.read().await;
@@ -142,25 +162,15 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
         ..AgentConfig::default()
     };
 
-    let mem = Arc::clone(&state.memory_manager);
-    let sm = Arc::clone(&state.skill_manager);
-
-    let mut agent = Agent::new(
-        llm_client,
-        Arc::clone(&state.tool_registry),
-        mem,
-        sm,
-        agent_config,
-    );
-
-    agent.set_session_id(Uuid::new_v4().to_string());
-
-    // Pre-load conversation history (excluding the last user message which agent.chat will add).
+    // Build conversation history (all messages except the last user message).
     let core_messages = convert_messages(&payload.messages);
     let history = core_messages[..core_messages.len().saturating_sub(1)].to_vec();
-    agent.load_history(history);
 
-    match agent.chat(user_msg, None).await {
+    match state
+        .runtime
+        .handle_message(&source, user_msg, agent_config, None, history)
+        .await
+    {
         Ok(response) => {
             let resp_id = format!("chatcmpl-{}", Uuid::new_v4());
             let reply = json!({
@@ -199,7 +209,11 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
 }
 
 /// Streaming handler — returns an SSE stream.
-async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Response {
+async fn handle_streaming(
+    state: Arc<AppState>,
+    headers: HeaderMap,
+    payload: ChatRequest,
+) -> Response {
     let user_msg = match last_user_message(&payload.messages) {
         Some(m) => m,
         None => {
@@ -213,7 +227,6 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
     let resp_id = format!("chatcmpl-{}", Uuid::new_v4());
     let model_name = state.config.model_name.clone();
-    let model_override = payload.model.clone();
 
     // Channel for streaming events from the agent callback to the SSE response.
     let (tx, mut rx) = mpsc::channel::<AgentEvent>(256);
@@ -225,39 +238,29 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
         build_compressor_config(&rc)
     };
 
+    let source = extract_session_source(&headers);
+
+    // Build conversation history (all messages except the last user message).
+    let core_messages = convert_messages(&payload.messages);
+    let history = core_messages[..core_messages.len().saturating_sub(1)].to_vec();
+
     // Spawn the agent loop in a background task.
     tokio::spawn(async move {
-        let llm_client = make_llm_client(&state, model_override.as_deref());
-
-        let mem = Arc::clone(&state.memory_manager);
-        let sm = Arc::clone(&state.skill_manager);
-
         let agent_config = AgentConfig {
             model_name: model_name_clone,
             compressor_config,
             ..AgentConfig::default()
         };
 
-        let mut agent = Agent::new(
-            llm_client,
-            Arc::clone(&state.tool_registry),
-            mem,
-            sm,
-            agent_config,
-        );
-
-        agent.set_session_id(Uuid::new_v4().to_string());
-
-        let core_messages = convert_messages(&payload.messages);
-        let history = core_messages[..core_messages.len().saturating_sub(1)].to_vec();
-        agent.load_history(history);
-
         let tx_cb = tx.clone();
-        let callback: EventCallback = Box::new(move |event: AgentEvent| {
+        let callback: iron_core::event::EventCallback = Box::new(move |event: AgentEvent| {
             let _ = tx_cb.try_send(event);
         });
 
-        let result = agent.chat(user_msg, Some(callback)).await;
+        let result = state
+            .runtime
+            .handle_message(&source, user_msg, agent_config, Some(callback), history)
+            .await;
 
         if let Err(e) = result {
             error!("Streaming agent error: {e}");
