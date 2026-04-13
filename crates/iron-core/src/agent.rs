@@ -98,6 +98,7 @@ pub struct Agent {
     config: AgentConfig,
     context_compressor: Option<ContextCompressor>,
     todos: Vec<TodoItem>,
+    session: SessionState,
 }
 
 impl Agent {
@@ -121,7 +122,29 @@ impl Agent {
             config,
             context_compressor,
             todos: Vec::new(),
+            session: SessionState::new(String::new()),
         }
+    }
+
+    /// Return a shared reference to the internal session.
+    pub fn session(&self) -> &SessionState {
+        &self.session
+    }
+
+    /// Return a mutable reference to the internal session.
+    pub fn session_mut(&mut self) -> &mut SessionState {
+        &mut self.session
+    }
+
+    /// Set the session ID.
+    pub fn set_session_id(&mut self, id: String) {
+        self.session.session_id = id;
+    }
+
+    /// Load conversation history into the session, clearing any cached system prompt.
+    pub fn load_history(&mut self, messages: Vec<Message>) {
+        self.session.messages = messages;
+        self.session.system_prompt = None;
     }
 
     /// Run a single user turn through the agent loop.
@@ -132,17 +155,16 @@ impl Agent {
     /// exhausted.
     pub async fn chat(
         &mut self,
-        session: &mut SessionState,
         user_message: String,
         event_callback: Option<EventCallback>,
     ) -> Result<AgentResponse, CoreError> {
         // 1. Build system prompt if not already set.
-        if session.system_prompt.is_none() {
-            session.system_prompt = Some(self.build_system_prompt(session));
+        if self.session.system_prompt.is_none() {
+            self.session.system_prompt = Some(self.build_system_prompt());
         }
 
         // 2. Append user message.
-        session.messages.push(Message {
+        self.session.messages.push(Message {
             role: "user".to_string(),
             content: Some(user_message),
             tool_calls: None,
@@ -169,7 +191,7 @@ impl Agent {
             let mut api_messages = Vec::new();
 
             // System message.
-            if let Some(ref sys) = session.system_prompt {
+            if let Some(ref sys) = self.session.system_prompt {
                 api_messages.push(Message {
                     role: "system".to_string(),
                     content: Some(sys.clone()),
@@ -180,7 +202,7 @@ impl Agent {
             }
 
             // Conversation messages.
-            api_messages.extend(session.messages.clone());
+            api_messages.extend(self.session.messages.clone());
 
             // Inject budget warning as a system message if applicable.
             if let Some(warning) = budget.budget_warning() {
@@ -196,7 +218,7 @@ impl Agent {
             // b. Get tool schemas.
             let tool_names = self.tool_registry.tool_names();
             let tool_ctx = ToolContext {
-                task_id: session.session_id.clone(),
+                task_id: self.session.session_id.clone(),
                 working_dir: std::env::current_dir().unwrap_or_default(),
                 enabled_tools: tool_names.clone(),
             };
@@ -274,10 +296,10 @@ impl Agent {
                     "Context compression triggered at {} prompt tokens",
                     usage.prompt_tokens
                 );
-                session.messages = compressor
-                    .compress(&session.messages, usage.prompt_tokens as u64)
+                self.session.messages = compressor
+                    .compress(&self.session.messages, usage.prompt_tokens as u64)
                     .await;
-                session.system_prompt = Some(self.build_system_prompt(session));
+                self.session.system_prompt = Some(self.build_system_prompt());
             }
 
             // d. Parse response — extract assistant message.
@@ -299,7 +321,7 @@ impl Agent {
                 tool_call_id: None,
                 name: None,
             };
-            session.messages.push(assistant_msg);
+            self.session.messages.push(assistant_msg);
 
             last_content = assistant_content;
 
@@ -315,7 +337,7 @@ impl Agent {
                 if !self.tool_registry.has_tool(&tc.function.name) && tc.function.name != "todo" {
                     warn!("Invalid tool call: {}", tc.function.name);
                     has_invalid = true;
-                    session.messages.push(Message {
+                    self.session.messages.push(Message {
                         role: "tool".to_string(),
                         content: Some(format!(
                             "Error: tool '{}' not found. Available tools: {}",
@@ -358,7 +380,7 @@ impl Agent {
                         self.handle_todo_call(&tc.function.arguments, &event_callback);
                     let result_text = serde_json::to_string(&todo_result).unwrap_or_default();
                     let result_text = truncate_tool_result(&result_text, &tc.function.name, &tc.id);
-                    session.messages.push(Message {
+                    self.session.messages.push(Message {
                         role: "tool".to_string(),
                         content: Some(result_text),
                         tool_calls: None,
@@ -426,7 +448,7 @@ impl Agent {
                 // Layer 1+2: Truncate oversized tool results.
                 let result_text = truncate_tool_result(&result_text, &tc.function.name, &tc.id);
 
-                session.messages.push(Message {
+                self.session.messages.push(Message {
                     role: "tool".to_string(),
                     content: Some(result_text),
                     tool_calls: None,
@@ -458,7 +480,7 @@ impl Agent {
     // ─── Private helpers ───
 
     /// Build the system prompt using [`PromptBuilder`].
-    fn build_system_prompt(&self, session: &SessionState) -> String {
+    fn build_system_prompt(&self) -> String {
         let memory_block = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 let mgr = self.memory_manager.lock().await;
@@ -481,7 +503,7 @@ impl Agent {
             context_files: self.config.context_files.clone(),
             custom_system_message: None,
             model_name: self.config.model_name.clone(),
-            session_id: session.session_id.clone(),
+            session_id: self.session.session_id.clone(),
             current_date: chrono_today(),
         };
 

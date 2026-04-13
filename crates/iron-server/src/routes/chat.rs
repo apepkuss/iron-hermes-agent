@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 use tracing::error;
 use uuid::Uuid;
 
-use iron_core::agent::{Agent, AgentConfig, SessionState};
+use iron_core::agent::{Agent, AgentConfig};
 use iron_core::context_compressor::{AuxiliaryLlmConfig, CompressorConfig};
 use iron_core::event::{AgentEvent, EventCallback};
 use iron_core::llm::client::{LlmClient, LlmConfig};
@@ -153,15 +153,14 @@ async fn handle_non_streaming(state: Arc<AppState>, payload: ChatRequest) -> Res
         agent_config,
     );
 
-    let mut session = SessionState::new(Uuid::new_v4().to_string());
+    agent.set_session_id(Uuid::new_v4().to_string());
 
     // Pre-load conversation history (excluding the last user message which agent.chat will add).
     let core_messages = convert_messages(&payload.messages);
-    for msg in &core_messages[..core_messages.len().saturating_sub(1)] {
-        session.messages.push(msg.clone());
-    }
+    let history = core_messages[..core_messages.len().saturating_sub(1)].to_vec();
+    agent.load_history(history);
 
-    match agent.chat(&mut session, user_msg, None).await {
+    match agent.chat(user_msg, None).await {
         Ok(response) => {
             let resp_id = format!("chatcmpl-{}", Uuid::new_v4());
             let reply = json!({
@@ -247,19 +246,18 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
             agent_config,
         );
 
-        let mut session = SessionState::new(Uuid::new_v4().to_string());
+        agent.set_session_id(Uuid::new_v4().to_string());
 
         let core_messages = convert_messages(&payload.messages);
-        for msg in &core_messages[..core_messages.len().saturating_sub(1)] {
-            session.messages.push(msg.clone());
-        }
+        let history = core_messages[..core_messages.len().saturating_sub(1)].to_vec();
+        agent.load_history(history);
 
         let tx_cb = tx.clone();
         let callback: EventCallback = Box::new(move |event: AgentEvent| {
             let _ = tx_cb.try_send(event);
         });
 
-        let result = agent.chat(&mut session, user_msg, Some(callback)).await;
+        let result = agent.chat(user_msg, Some(callback)).await;
 
         if let Err(e) = result {
             error!("Streaming agent error: {e}");
