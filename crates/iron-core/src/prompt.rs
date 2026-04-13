@@ -10,8 +10,9 @@ being genuinely useful over being verbose unless otherwise directed below. \
 Be targeted and efficient in your exploration and investigations.";
 
 /// Guidance on tool usage enforcement.
+/// Only injected for models that need explicit tool-use steering.
 /// Adapted from hermes-agent's TOOL_USE_ENFORCEMENT_GUIDANCE.
-const TOOL_USE_GUIDANCE: &str = "\
+const TOOL_USE_ENFORCEMENT_GUIDANCE: &str = "\
 # Tool-use enforcement\n\
 You MUST use your tools to take action — do not describe what you would do \
 or plan to do without actually doing it. When you say you will perform an \
@@ -23,7 +24,32 @@ what you plan to do next time. If you have tools available that can accomplish \
 the task, use them instead of telling the user what you would do.\n\
 Every response should either (a) contain tool calls that make progress, or \
 (b) deliver a final result to the user. Responses that only describe intentions \
-without acting are not acceptable.\n\
+without acting are not acceptable.";
+
+/// Google Gemini/Gemma specific operational guidance.
+/// Adapted from hermes-agent's GOOGLE_MODEL_OPERATIONAL_GUIDANCE.
+const GOOGLE_MODEL_OPERATIONAL_GUIDANCE: &str = "\
+# Google model operational directives\n\
+Follow these operational rules strictly:\n\
+- **Absolute paths:** Always construct and use absolute file paths for all \
+file system operations. Combine the project root with relative paths.\n\
+- **Verify first:** Use read_file/search_files to check file contents and \
+project structure before making changes. Never guess at file contents.\n\
+- **Dependency checks:** Never assume a library is available. Check \
+package.json, requirements.txt, Cargo.toml, etc. before importing.\n\
+- **Conciseness:** Keep explanatory text brief — a few sentences, not \
+paragraphs. Focus on actions and results over narration.\n\
+- **Parallel tool calls:** When you need to perform multiple independent \
+operations (e.g. reading several files), make all the tool calls in a \
+single response rather than sequentially.\n\
+- **Non-interactive commands:** Use flags like -y, --yes, --non-interactive \
+to prevent CLI tools from hanging on prompts.\n\
+- **Keep going:** Work autonomously until the task is fully resolved. \
+Don't stop with a plan — execute it.";
+
+/// Response format guidance injected for all models.
+/// Ensures tool results are presented as human-readable text.
+const RESPONSE_FORMAT_GUIDANCE: &str = "\
 When you receive tool results, synthesize them into a clear, natural-language \
 response for the user. Never output raw JSON or tool result data directly. \
 Summarize, explain, and present the information in a readable format.";
@@ -51,6 +77,21 @@ skill with skill_manage so you can reuse it next time.\n\
 When using a skill and finding it outdated, incomplete, or wrong, \
 patch it immediately with skill_manage(action='patch') — don't wait to be asked. \
 Skills that aren't maintained become liabilities.";
+
+/// Model name substrings that trigger tool-use enforcement guidance.
+/// Only these model families need explicit tool-use steering.
+/// Models like Qwen, Llama, Hermes have good native function calling and
+/// don't need (and may be harmed by) aggressive tool-use enforcement.
+const TOOL_USE_ENFORCEMENT_MODELS: &[&str] = &["gpt", "codex", "gemini", "gemma", "grok"];
+
+/// Model name substrings that trigger Google-specific operational guidance.
+const GOOGLE_MODELS: &[&str] = &["gemini", "gemma"];
+
+/// Check if a model name matches any pattern in the list (case-insensitive).
+fn model_matches(model_name: &str, patterns: &[&str]) -> bool {
+    let lower = model_name.to_lowercase();
+    patterns.iter().any(|p| lower.contains(p))
+}
 
 /// Context passed to [`PromptBuilder::build`] to assemble the system prompt.
 pub struct PromptContext {
@@ -82,14 +123,16 @@ impl PromptBuilder {
     /// by `"\n\n"`:
     ///
     /// 1. Identity (custom or [`DEFAULT_IDENTITY`])
-    /// 2. Tool-use guidance ([`TOOL_USE_GUIDANCE`], always included)
-    /// 3. Memory guidance ([`MEMORY_GUIDANCE`], always included)
-    /// 4. Skills guidance ([`SKILLS_GUIDANCE`], always included)
-    /// 5. Custom system message (if set)
-    /// 6. Memory block (if set)
-    /// 7. Skills index (if set)
-    /// 8. Context files (each entry, in order)
-    /// 9. Metadata (date, session_id, model_name)
+    /// 2. Tool-use enforcement (only for models in [`TOOL_USE_ENFORCEMENT_MODELS`])
+    /// 3. Google operational guidance (only for Gemini/Gemma)
+    /// 4. Response format guidance (always)
+    /// 5. Memory guidance (always)
+    /// 6. Skills guidance (always)
+    /// 7. Custom system message (if set)
+    /// 8. Memory block (if set)
+    /// 9. Skills index (if set)
+    /// 10. Context files (each entry, in order)
+    /// 11. Metadata (date, session_id, model_name)
     pub fn build(ctx: &PromptContext) -> String {
         let mut sections: Vec<&str> = Vec::new();
 
@@ -97,36 +140,46 @@ impl PromptBuilder {
         let identity = ctx.identity.as_deref().unwrap_or(DEFAULT_IDENTITY);
         sections.push(identity);
 
-        // 2. Tool-use guidance (always)
-        sections.push(TOOL_USE_GUIDANCE);
+        // 2. Tool-use enforcement (conditional)
+        if model_matches(&ctx.model_name, TOOL_USE_ENFORCEMENT_MODELS) {
+            sections.push(TOOL_USE_ENFORCEMENT_GUIDANCE);
+        }
 
-        // 3. Memory guidance (always)
+        // 3. Google operational guidance (conditional)
+        if model_matches(&ctx.model_name, GOOGLE_MODELS) {
+            sections.push(GOOGLE_MODEL_OPERATIONAL_GUIDANCE);
+        }
+
+        // 4. Response format guidance (always)
+        sections.push(RESPONSE_FORMAT_GUIDANCE);
+
+        // 5. Memory guidance (always)
         sections.push(MEMORY_GUIDANCE);
 
-        // 4. Skills guidance (always)
+        // 6. Skills guidance (always)
         sections.push(SKILLS_GUIDANCE);
 
-        // 5. Custom system message
+        // 7. Custom system message
         if let Some(ref msg) = ctx.custom_system_message {
             sections.push(msg.as_str());
         }
 
-        // 6. Memory block
+        // 8. Memory block
         if let Some(ref block) = ctx.memory_block {
             sections.push(block.as_str());
         }
 
-        // 7. Skills index
+        // 9. Skills index
         if let Some(ref index) = ctx.skills_index {
             sections.push(index.as_str());
         }
 
-        // 8. Context files
+        // 10. Context files
         for file in &ctx.context_files {
             sections.push(file.as_str());
         }
 
-        // 9. Metadata
+        // 11. Metadata
         let metadata = format!(
             "Date: {}\nSession: {}\nModel: {}",
             ctx.current_date, ctx.session_id, ctx.model_name,

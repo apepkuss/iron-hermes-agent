@@ -399,7 +399,16 @@ impl Agent {
                 // Emit ToolCompleted event
                 if let Some(ref cb) = event_callback {
                     let (success, preview) = match &result {
-                        Ok(tr) => (tr.success, truncate_preview(&tr.output.to_string(), 100)),
+                        Ok(tr) => {
+                            let output_str = tr.output.to_string();
+                            let size = output_str.len();
+                            let size_str = if size >= 1024 {
+                                format!("{:.1}KB", size as f64 / 1024.0)
+                            } else {
+                                format!("{}B", size)
+                            };
+                            (tr.success, format!("returned {size_str}"))
+                        }
                         Err(e) => (false, truncate_preview(&e.to_string(), 100)),
                     };
                     cb(AgentEvent::ToolCompleted {
@@ -700,8 +709,7 @@ impl Agent {
                 }
             }
             "update" => {
-                if let (Some(idx), Some(status)) =
-                    (args["index"].as_u64(), args["status"].as_str())
+                if let (Some(idx), Some(status)) = (args["index"].as_u64(), args["status"].as_str())
                     && let Some(item) = self.todos.get_mut(idx as usize)
                 {
                     item.status = status.to_string();
