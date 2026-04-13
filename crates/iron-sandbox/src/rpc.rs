@@ -34,14 +34,21 @@ impl RpcServer {
         self.call_count.load(Ordering::SeqCst)
     }
 
-    /// Bind a UnixListener, accept one connection, serve line-delimited JSON requests.
+    /// Bind a UnixListener, accept connections in a loop, serve line-delimited JSON requests.
+    ///
+    /// Each connection handles one request-response pair (the Python/Shell bridge
+    /// creates a new connection per tool call). The loop continues until the
+    /// listener is dropped (when the sandbox subprocess exits and the temp dir
+    /// is cleaned up).
     pub async fn serve(self, socket_path: &Path) -> Result<Arc<AtomicU32>, SandboxError> {
         let listener = UnixListener::bind(socket_path)?;
         let call_count = Arc::clone(&self.call_count);
+        let server = Arc::new(self);
 
         tokio::spawn(async move {
-            match listener.accept().await {
-                Ok((stream, _)) => {
+            while let Ok((stream, _)) = listener.accept().await {
+                let server = Arc::clone(&server);
+                tokio::spawn(async move {
                     let (read_half, mut write_half) = stream.into_split();
                     let mut lines = BufReader::new(read_half).lines();
 
@@ -51,7 +58,7 @@ impl RpcServer {
                             continue;
                         }
 
-                        let response = self.handle_request(&line).await;
+                        let response = server.handle_request(&line).await;
                         let mut resp_str = serde_json::to_string(&response)
                             .unwrap_or_else(|_| r#"{"error":"serialization error"}"#.to_string());
                         resp_str.push('\n');
@@ -60,10 +67,7 @@ impl RpcServer {
                             break;
                         }
                     }
-                }
-                Err(e) => {
-                    tracing::error!("RPC server accept error: {}", e);
-                }
+                });
             }
         });
 
