@@ -104,6 +104,28 @@ curl -s "$SERVER_URL/v1/chat/completions" \
 
 pass "Cleanup done"
 
+# 6. Test: execute_code (Python)
+echo ""
+echo "--- Test: Execute Code (Python) ---"
+RESPONSE=$(curl -s --max-time 600 "$SERVER_URL/v1/chat/completions" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"$MODEL\",
+    \"messages\": [{\"role\": \"user\", \"content\": \"使用 execute_code 工具，执行 Python 代码: print(2+3)，然后告诉我结果\"}],
+    \"stream\": false
+  }")
+
+echo "Response (first 500 chars):"
+echo "$RESPONSE" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    content = d['choices'][0]['message']['content']
+    print(content[:500])
+except Exception as e:
+    print(f'Parse error: {e}')
+"
+
 echo ""
 echo "=== Verification Complete ==="
-echo "请人工检查以上输出，确认 LLM 正确调用了 skills_list、skill_view、memory 工具。"
+echo "请人工检查以上输出，确认 LLM 正确调用了 skills_list、skill_view、memory、execute_code 工具。"
