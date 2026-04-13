@@ -34,6 +34,10 @@ fn test_runtime_config_defaults() {
         auxiliary_model: None,
         compression_threshold: 0.65,
         context_length_override: None,
+        fallback_model: None,
+        agent_timeout_secs: 600,
+        inactivity_timeout_secs: 300,
+        session_idle_timeout_secs: 1800,
     };
 
     assert_eq!(rc.compression_threshold, 0.65);
@@ -53,6 +57,10 @@ fn test_runtime_config_serialization() {
         auxiliary_model: Some("Qwen3-4B".to_string()),
         compression_threshold: 0.65,
         context_length_override: Some(131072),
+        fallback_model: None,
+        agent_timeout_secs: 600,
+        inactivity_timeout_secs: 300,
+        session_idle_timeout_secs: 1800,
     };
 
     let json = serde_json::to_value(&rc).unwrap();
@@ -71,6 +79,10 @@ fn test_runtime_config_serialization_optional_nulls() {
         auxiliary_model: None,
         compression_threshold: 0.80,
         context_length_override: None,
+        fallback_model: None,
+        agent_timeout_secs: 600,
+        inactivity_timeout_secs: 300,
+        session_idle_timeout_secs: 1800,
     };
 
     let json = serde_json::to_value(&rc).unwrap();
@@ -308,6 +320,10 @@ fn test_runtime_config_threshold_range() {
             auxiliary_model: None,
             compression_threshold: threshold,
             context_length_override: None,
+            fallback_model: None,
+            agent_timeout_secs: 600,
+            inactivity_timeout_secs: 300,
+            session_idle_timeout_secs: 1800,
         };
         let json = serde_json::to_value(&rc).unwrap();
         let roundtripped: RuntimeConfig = serde_json::from_value(json).unwrap();

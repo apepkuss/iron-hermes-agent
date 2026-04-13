@@ -14,6 +14,12 @@ pub enum CoreError {
     #[error("Configuration error: {0}")]
     Config(String),
 
+    #[error("Agent is busy processing another request for this session")]
+    AgentBusy,
+
+    #[error("Agent execution timed out after {0} seconds")]
+    Timeout(u64),
+
     #[error(transparent)]
     Tool(#[from] iron_tools::error::ToolError),
 

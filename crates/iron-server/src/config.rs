@@ -26,6 +26,10 @@ pub struct ServerConfig {
     pub compression_threshold: f64,
     /// Optional override for the primary LLM context length (in tokens).
     pub context_length_override: Option<u64>,
+    /// Optional fallback model used when the primary model is unavailable.
+    pub fallback_model: Option<String>,
+    /// Maximum seconds an agent is allowed to run before timing out.
+    pub agent_timeout_secs: u64,
 }
 
 impl ServerConfig {
@@ -43,6 +47,8 @@ impl ServerConfig {
     /// | `AUX_MODEL`             | *(none)*       |
     /// | `COMPRESSION_THRESHOLD` | `0.65`         |
     /// | `CONTEXT_LENGTH`        | *(none)*       |
+    /// | `FALLBACK_MODEL`        | *(none)*       |
+    /// | `AGENT_TIMEOUT`         | `600`          |
     pub fn from_env() -> Self {
         Self {
             host: env::var("IRON_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
@@ -62,6 +68,11 @@ impl ServerConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0.65),
             context_length_override: env::var("CONTEXT_LENGTH").ok().and_then(|v| v.parse().ok()),
+            fallback_model: env::var("FALLBACK_MODEL").ok(),
+            agent_timeout_secs: env::var("AGENT_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(600),
         }
     }
 }
@@ -82,4 +93,27 @@ pub struct RuntimeConfig {
     pub compression_threshold: f64,
     /// Optional override for the primary LLM context length (in tokens).
     pub context_length_override: Option<u64>,
+    /// Optional fallback model used when the primary model is unavailable.
+    pub fallback_model: Option<String>,
+    /// Maximum seconds an agent is allowed to run before timing out.
+    #[serde(default = "default_agent_timeout_secs")]
+    pub agent_timeout_secs: u64,
+    /// Seconds of inactivity before an agent is considered idle.
+    #[serde(default = "default_inactivity_timeout_secs")]
+    pub inactivity_timeout_secs: u64,
+    /// Seconds before an idle session is expired and cleaned up.
+    #[serde(default = "default_session_idle_timeout_secs")]
+    pub session_idle_timeout_secs: u64,
+}
+
+fn default_agent_timeout_secs() -> u64 {
+    600
+}
+
+fn default_inactivity_timeout_secs() -> u64 {
+    300
+}
+
+fn default_session_idle_timeout_secs() -> u64 {
+    1800
 }

@@ -78,6 +78,10 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         auxiliary_model: config.auxiliary_model.clone(),
         compression_threshold: config.compression_threshold,
         context_length_override: config.context_length_override,
+        fallback_model: config.fallback_model.clone(),
+        agent_timeout_secs: config.agent_timeout_secs,
+        inactivity_timeout_secs: 300,
+        session_idle_timeout_secs: 1800,
     }));
 
     AppState {
