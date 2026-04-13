@@ -1,10 +1,11 @@
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tokio::sync::{Mutex, RwLock};
 
 use iron_memory::manager::MemoryManager;
 use iron_memory::tool_module::MemoryTools;
+use iron_sandbox::tool_module::register_execute_code;
 use iron_skills::manager::SkillManager;
 use iron_skills::tool_module::SkillTools;
 use iron_tool_api::{ToolModule, ToolRegistry};
@@ -57,7 +58,18 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         module.register(&mut registry);
     }
 
+    // Register execute_code using a OnceLock to break the circular dependency:
+    // the handler needs Arc<ToolRegistry> for sandbox RPC dispatch, but
+    // ToolRegistry must be fully built before it can be wrapped in Arc.
+    let registry_holder: Arc<OnceLock<Arc<ToolRegistry>>> = Arc::new(OnceLock::new());
+    register_execute_code(&mut registry, Arc::clone(&registry_holder));
+
     let tool_registry = Arc::new(registry);
+
+    // Populate the OnceLock so that execute_code handlers can resolve the registry.
+    registry_holder
+        .set(Arc::clone(&tool_registry))
+        .unwrap_or_else(|_| panic!("registry_holder already set"));
 
     // Runtime config — initialized from ServerConfig, mutable via /api/config
     let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
