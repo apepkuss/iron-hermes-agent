@@ -1459,20 +1459,36 @@ html, body {
           if (data === '[DONE]') continue;
 
           if (currentEvent === 'tool_started') {
-            // Replace "Thinking..." with tool status while tools run
-            if (!loadingCleared) {
-              loadingContent.innerHTML =
-                '<div class="loading-indicator">' +
-                '<div class="loading-dot"></div>' +
-                '<div class="loading-dot"></div>' +
-                '<div class="loading-dot"></div>' +
-                '<span class="loading-text">Calling tools...</span>' +
-                '</div>';
-            }
-            try { handleToolStarted(JSON.parse(data)); } catch(e) {}
+            // Show specific tool name in reply box while tools run
+            try {
+              var toolData = JSON.parse(data);
+              if (!loadingCleared) {
+                loadingContent.innerHTML =
+                  '<div class="loading-indicator">' +
+                  '<div class="loading-dot"></div>' +
+                  '<div class="loading-dot"></div>' +
+                  '<div class="loading-dot"></div>' +
+                  '<span class="loading-text">Calling ' + escapeHtml(toolData.tool) + '...</span>' +
+                  '</div>';
+              }
+              handleToolStarted(toolData);
+            } catch(e) {}
             currentEvent = null;
           } else if (currentEvent === 'tool_completed') {
-            try { handleToolCompleted(JSON.parse(data)); } catch(e) {}
+            try {
+              var completedData = JSON.parse(data);
+              handleToolCompleted(completedData);
+              // After tool completes, show "Generating response..." if no text yet
+              if (!loadingCleared) {
+                loadingContent.innerHTML =
+                  '<div class="loading-indicator">' +
+                  '<div class="loading-dot"></div>' +
+                  '<div class="loading-dot"></div>' +
+                  '<div class="loading-dot"></div>' +
+                  '<span class="loading-text">Generating response...</span>' +
+                  '</div>';
+              }
+            } catch(e) {}
             currentEvent = null;
           } else if (currentEvent === 'todo_update') {
             try { handleTodoUpdate(JSON.parse(data)); } catch(e) {}
@@ -1622,13 +1638,8 @@ html, body {
       list.appendChild(div);
     });
 
-    var allDone = data.todos.every(function(t) { return t.status === 'completed'; });
-    if (allDone) {
-      setTimeout(function() {
-        sidebar.classList.remove('visible');
-        app.classList.remove('app-with-sidebar');
-      }, 3000);
-    }
+    // Don't auto-collapse while streaming — sidebar stays until next conversation
+    // User can see final state of all completed tasks
   }
 
   // Focus input on load

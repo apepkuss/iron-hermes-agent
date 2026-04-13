@@ -350,17 +350,9 @@ impl Agent {
                 let args: Value = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(Value::Object(serde_json::Map::new()));
 
-                // Emit ToolStarted event
-                if let Some(ref cb) = event_callback {
-                    let preview = build_args_preview(&tc.function.arguments);
-                    cb(AgentEvent::ToolStarted {
-                        tool: tc.function.name.clone(),
-                        args_preview: preview,
-                        call_id: tc.id.clone(),
-                    });
-                }
-
                 // TODO tool interception (handled by Agent, not ToolRegistry)
+                // No ToolStarted/ToolCompleted events — TODO state is shown via
+                // TodoUpdate events in the sidebar, not in the tool progress area.
                 if tc.function.name == "todo" {
                     let todo_result =
                         self.handle_todo_call(&tc.function.arguments, &event_callback);
@@ -374,18 +366,17 @@ impl Agent {
                         name: Some("todo".to_string()),
                     });
                     tool_calls_made += 1;
-
-                    // Emit ToolCompleted for todo
-                    if let Some(ref cb) = event_callback {
-                        cb(AgentEvent::ToolCompleted {
-                            tool: "todo".to_string(),
-                            call_id: tc.id.clone(),
-                            duration_ms: 0,
-                            success: true,
-                            result_preview: format!("{} items", self.todos.len()),
-                        });
-                    }
                     continue;
+                }
+
+                // Emit ToolStarted event (only for business tools, not todo)
+                if let Some(ref cb) = event_callback {
+                    let preview = build_args_preview(&tc.function.arguments);
+                    cb(AgentEvent::ToolStarted {
+                        tool: tc.function.name.clone(),
+                        args_preview: preview,
+                        call_id: tc.id.clone(),
+                    });
                 }
 
                 debug!("Dispatching tool: {} with args: {}", tc.function.name, args);
