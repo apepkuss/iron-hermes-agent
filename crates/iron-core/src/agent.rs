@@ -98,6 +98,7 @@ pub struct Agent {
     config: AgentConfig,
     context_compressor: Option<ContextCompressor>,
     todos: Vec<TodoItem>,
+    tools_called_since_last_todo: Vec<String>,
     session: SessionState,
 }
 
@@ -122,6 +123,7 @@ impl Agent {
             config,
             context_compressor,
             todos: Vec::new(),
+            tools_called_since_last_todo: Vec::new(),
             session: SessionState::new(String::new()),
         }
     }
@@ -228,7 +230,7 @@ impl Agent {
                 "type": "function",
                 "function": {
                     "name": "todo",
-                    "description": "Manage a task list to track progress on multi-step work. Use when working on complex tasks with 3+ steps.",
+                    "description": "Manage a task list to track progress on multi-step work. Use when working on complex tasks with 3+ steps. IMPORTANT: You must actually call the corresponding tools and get real results BEFORE marking any task as completed. Never mark a task completed without having executed the tool and received its output. Only create tasks that the user explicitly requested — do not add extra tasks.",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -457,6 +459,10 @@ impl Agent {
                 });
 
                 tool_calls_made += 1;
+
+                // Track non-todo tool calls for todo completion verification
+                self.tools_called_since_last_todo
+                    .push(tc.function.name.clone());
             }
 
             // h. Post-tool — loop continues.
@@ -699,6 +705,10 @@ impl Agent {
     }
 
     /// Handle the built-in `todo` tool call.
+    ///
+    /// When updating a task to "completed", verifies that at least one
+    /// non-todo tool was called since the task was created or last marked
+    /// in_progress. Rejects fake completions with a guiding error message.
     fn handle_todo_call(
         &mut self,
         args_json: &str,
@@ -720,12 +730,28 @@ impl Agent {
                         })
                         .collect();
                 }
+                // Reset tool call tracker when a new todo list is created
+                self.tools_called_since_last_todo.clear();
             }
             "update" => {
                 if let (Some(idx), Some(status)) = (args["index"].as_u64(), args["status"].as_str())
-                    && let Some(item) = self.todos.get_mut(idx as usize)
                 {
-                    item.status = status.to_string();
+                    if status == "completed" && self.tools_called_since_last_todo.is_empty() {
+                        // Reject: no tool was called since last todo operation
+                        return ToolResult::err(
+                            "Cannot mark task as completed: you must first call the \
+                             corresponding tool (e.g. execute_code, skills_list, memory) \
+                             and get its result before marking a task completed. \
+                             Please execute the tool now.",
+                        );
+                    }
+
+                    if let Some(item) = self.todos.get_mut(idx as usize) {
+                        item.status = status.to_string();
+                    }
+
+                    // Reset tracker after each todo update
+                    self.tools_called_since_last_todo.clear();
                 }
             }
             other => {

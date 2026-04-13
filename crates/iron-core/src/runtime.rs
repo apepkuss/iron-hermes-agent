@@ -363,11 +363,18 @@ impl AgentRuntime {
         }
 
         // Cache miss — build a new agent.
+        // Use model from AgentConfig (per-request override) if non-default,
+        // otherwise fall back to RuntimeConfig (startup default).
         let cfg = self.config.read().await;
+        let model = if agent_config.model_name.is_empty() || agent_config.model_name == "unknown" {
+            cfg.llm_model.clone()
+        } else {
+            agent_config.model_name.clone()
+        };
         let llm_config = LlmConfig {
             base_url: cfg.llm_base_url.clone(),
             api_key: cfg.llm_api_key.clone(),
-            model: cfg.llm_model.clone(),
+            model,
             temperature: None,
             max_tokens: None,
         };

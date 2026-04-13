@@ -156,8 +156,14 @@ async fn handle_non_streaming(
         build_compressor_config(&rc)
     };
 
+    let model_name = payload
+        .model
+        .as_deref()
+        .unwrap_or(&state.config.llm_model)
+        .to_string();
+
     let agent_config = AgentConfig {
-        model_name: state.config.model_name.clone(),
+        model_name: model_name.clone(),
         compressor_config,
         ..AgentConfig::default()
     };
@@ -228,10 +234,15 @@ async fn handle_streaming(
     let resp_id = format!("chatcmpl-{}", Uuid::new_v4());
     let model_name = state.config.model_name.clone();
 
+    // Use model from request, fallback to server config
+    let request_model = payload
+        .model
+        .as_deref()
+        .unwrap_or(&state.config.llm_model)
+        .to_string();
+
     // Channel for streaming events from the agent callback to the SSE response.
     let (tx, mut rx) = mpsc::channel::<AgentEvent>(256);
-
-    let model_name_clone = model_name.clone();
 
     let compressor_config = {
         let rc = state.runtime_config.read().await;
@@ -247,7 +258,7 @@ async fn handle_streaming(
     // Spawn the agent loop in a background task.
     tokio::spawn(async move {
         let agent_config = AgentConfig {
-            model_name: model_name_clone,
+            model_name: request_model,
             compressor_config,
             ..AgentConfig::default()
         };
