@@ -119,6 +119,26 @@ html, body {
   border-color: var(--text);
 }
 
+/* ── New Chat button ── */
+.new-chat-btn {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--white);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.new-chat-btn:hover { background: var(--bg); }
+
 /* ── Settings gear button ── */
 .settings-btn {
   position: absolute;
@@ -924,6 +944,7 @@ html, body {
 <body>
 <div class="app" id="app">
   <header class="header">
+    <button class="new-chat-btn" id="newChatBtn" title="New Chat">+</button>
     <h1>IRON HERMES</h1>
     <hr class="header-rule">
     <div class="model-selector">
@@ -1055,6 +1076,10 @@ html, body {
   const contextLengthInput = document.getElementById('contextLength');
   const settingsSaveBtn = document.getElementById('settingsSaveBtn');
   const settingsStatus = document.getElementById('settingsStatus');
+
+  // Session management
+  let chatId = localStorage.getItem('iron_chat_id') || crypto.randomUUID();
+  localStorage.setItem('iron_chat_id', chatId);
 
   let messages = [];
   let isStreaming = false;
@@ -1408,7 +1433,12 @@ html, body {
       abortController = new AbortController();
       const response = await fetch('/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Platform': 'webui',
+          'X-Chat-Id': chatId,
+          'X-User-Id': 'local',
+        },
         body: JSON.stringify({
           messages: messages,
           model: modelSelect.value || undefined,
@@ -1641,6 +1671,40 @@ html, body {
     // Don't auto-collapse while streaming — sidebar stays until next conversation
     // User can see final state of all completed tasks
   }
+
+  // ── New Chat button ──
+  document.getElementById('newChatBtn').addEventListener('click', function() {
+    // Generate new chat ID
+    chatId = crypto.randomUUID();
+    localStorage.setItem('iron_chat_id', chatId);
+
+    // Reset API session
+    fetch('/api/session/reset', {
+      method: 'POST',
+      headers: {
+        'X-Platform': 'webui',
+        'X-Chat-Id': chatId,
+        'X-User-Id': 'local',
+      },
+    });
+
+    // Clear UI
+    messages = [];
+    chatArea.innerHTML = '';
+    if (emptyState) {
+      chatArea.appendChild(emptyState);
+      emptyState.style.display = '';
+    }
+
+    // Hide TODO sidebar
+    var sidebar = document.getElementById('todoSidebar');
+    if (sidebar) sidebar.classList.remove('visible');
+    var app = document.getElementById('app');
+    if (app) app.classList.remove('app-with-sidebar');
+
+    // Focus input
+    msgInput.focus();
+  });
 
   // Focus input on load
   msgInput.focus();
