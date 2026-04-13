@@ -8,4 +8,5 @@ pub mod error;
 pub mod event;
 pub mod llm;
 pub mod prompt;
+pub mod runtime;
 pub mod session;
