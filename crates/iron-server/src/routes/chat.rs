@@ -216,8 +216,8 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
     let model_name = state.config.model_name.clone();
     let model_override = payload.model.clone();
 
-    // Channel for streaming deltas from the agent callback to the SSE response.
-    let (tx, mut rx) = mpsc::channel::<String>(256);
+    // Channel for streaming events from the agent callback to the SSE response.
+    let (tx, mut rx) = mpsc::channel::<AgentEvent>(256);
 
     let model_name_clone = model_name.clone();
 
@@ -256,9 +256,7 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
         let tx_cb = tx.clone();
         let callback: EventCallback = Box::new(move |event: AgentEvent| {
-            if let AgentEvent::TextDelta { content } = event {
-                let _ = tx_cb.try_send(content);
-            }
+            let _ = tx_cb.try_send(event);
         });
 
         let result = agent.chat(&mut session, user_msg, Some(callback)).await;
@@ -272,24 +270,50 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
 
     // Build the SSE stream from the channel.
     let sse_stream = async_stream::stream! {
-        while let Some(delta) = rx.recv().await {
-            let chunk = json!({
-                "id": resp_id,
-                "object": "chat.completion.chunk",
-                "created": std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-                "model": model_name,
-                "choices": [{
-                    "index": 0,
-                    "delta": {
-                        "content": delta,
-                    },
-                    "finish_reason": Value::Null,
-                }]
-            });
-            yield Ok::<_, std::convert::Infallible>(Event::default().data(chunk.to_string()));
+        while let Some(event) = rx.recv().await {
+            match event {
+                AgentEvent::TextDelta { content } => {
+                    let chunk = json!({
+                        "id": resp_id,
+                        "object": "chat.completion.chunk",
+                        "created": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_secs(),
+                        "model": model_name,
+                        "choices": [{
+                            "index": 0,
+                            "delta": { "content": content },
+                            "finish_reason": Value::Null,
+                        }]
+                    });
+                    yield Ok::<_, std::convert::Infallible>(
+                        Event::default().data(chunk.to_string())
+                    );
+                }
+                AgentEvent::ToolStarted { tool, args_preview, call_id } => {
+                    let data = json!({
+                        "tool": tool,
+                        "args_preview": args_preview,
+                        "call_id": call_id,
+                    });
+                    yield Ok(Event::default().event("tool_started").data(data.to_string()));
+                }
+                AgentEvent::ToolCompleted { tool, call_id, duration_ms, success, result_preview } => {
+                    let data = json!({
+                        "tool": tool,
+                        "call_id": call_id,
+                        "duration_ms": duration_ms,
+                        "success": success,
+                        "result_preview": result_preview,
+                    });
+                    yield Ok(Event::default().event("tool_completed").data(data.to_string()));
+                }
+                AgentEvent::TodoUpdate { todos } => {
+                    let data = json!({"todos": todos});
+                    yield Ok(Event::default().event("todo_update").data(data.to_string()));
+                }
+            }
         }
 
         // Send the final [DONE] sentinel.
