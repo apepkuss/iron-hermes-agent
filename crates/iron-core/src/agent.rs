@@ -6,6 +6,7 @@ use tracing::{debug, error, warn};
 use crate::budget::IterationBudget;
 use crate::context_compressor::{CompressorConfig, ContextCompressor};
 use crate::error::CoreError;
+use crate::event::{AgentEvent, EventCallback, TodoItem, build_args_preview, truncate_preview};
 use crate::llm::client::LlmClient;
 use crate::llm::types::Message;
 use crate::prompt::{PromptBuilder, PromptContext};
@@ -13,6 +14,7 @@ use crate::session::types::TokenUsage;
 
 use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
+use iron_tool_api::ToolResult;
 use iron_tools::registry::ToolRegistry;
 use iron_tools::types::ToolContext;
 use tokio::sync::Mutex;
@@ -65,11 +67,6 @@ pub struct AgentResponse {
     pub tool_calls_made: u32,
 }
 
-// ─── Streaming callback ───
-
-/// Callback invoked with text deltas while streaming an LLM response.
-pub type StreamCallback = Box<dyn Fn(&str) + Send + Sync>;
-
 // ─── Session state ───
 
 /// In-memory session state threaded through the agent loop.
@@ -100,6 +97,7 @@ pub struct Agent {
     skill_manager: Arc<SkillManager>,
     config: AgentConfig,
     context_compressor: Option<ContextCompressor>,
+    todos: Vec<TodoItem>,
 }
 
 impl Agent {
@@ -122,6 +120,7 @@ impl Agent {
             skill_manager,
             config,
             context_compressor,
+            todos: Vec::new(),
         }
     }
 
@@ -135,7 +134,7 @@ impl Agent {
         &mut self,
         session: &mut SessionState,
         user_message: String,
-        stream_callback: Option<StreamCallback>,
+        event_callback: Option<EventCallback>,
     ) -> Result<AgentResponse, CoreError> {
         // 1. Build system prompt if not already set.
         if session.system_prompt.is_none() {
@@ -201,7 +200,40 @@ impl Agent {
                 working_dir: std::env::current_dir().unwrap_or_default(),
                 enabled_tools: tool_names.clone(),
             };
-            let schemas = self.tool_registry.get_schemas(&tool_ctx);
+            let mut schemas = self.tool_registry.get_schemas(&tool_ctx);
+            // Inject todo tool schema (handled by Agent, not in ToolRegistry)
+            schemas.push(serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "todo",
+                    "description": "Manage a task list to track progress on multi-step work. Use when working on complex tasks with 3+ steps.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["set", "update"],
+                                "description": "'set' replaces the entire list. 'update' changes one item's status."
+                            },
+                            "todos": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "content": {"type": "string"},
+                                        "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]}
+                                    },
+                                    "required": ["content", "status"]
+                                },
+                                "description": "Full todo list. Required for 'set'."
+                            },
+                            "index": {"type": "integer", "description": "0-based index. Required for 'update'."},
+                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed"], "description": "New status. Required for 'update'."}
+                        },
+                        "required": ["action"]
+                    }
+                }
+            }));
             let tools_param = if schemas.is_empty() {
                 None
             } else {
@@ -210,7 +242,7 @@ impl Agent {
 
             // c. Call LLM (with retry for transient errors).
             let chat_result = self
-                .call_llm_with_retry(&api_messages, &tools_param, &stream_callback)
+                .call_llm_with_retry(&api_messages, &tools_param, &event_callback)
                 .await;
 
             let response = match chat_result {
@@ -280,7 +312,7 @@ impl Agent {
             // f. Validate tool calls.
             let mut has_invalid = false;
             for tc in &calls {
-                if !self.tool_registry.has_tool(&tc.function.name) {
+                if !self.tool_registry.has_tool(&tc.function.name) && tc.function.name != "todo" {
                     warn!("Invalid tool call: {}", tc.function.name);
                     has_invalid = true;
                     session.messages.push(Message {
@@ -318,11 +350,66 @@ impl Agent {
                 let args: Value = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(Value::Object(serde_json::Map::new()));
 
+                // Emit ToolStarted event
+                if let Some(ref cb) = event_callback {
+                    let preview = build_args_preview(&tc.function.arguments);
+                    cb(AgentEvent::ToolStarted {
+                        tool: tc.function.name.clone(),
+                        args_preview: preview,
+                        call_id: tc.id.clone(),
+                    });
+                }
+
+                // TODO tool interception (handled by Agent, not ToolRegistry)
+                if tc.function.name == "todo" {
+                    let todo_result =
+                        self.handle_todo_call(&tc.function.arguments, &event_callback);
+                    let result_text = serde_json::to_string(&todo_result).unwrap_or_default();
+                    let result_text = truncate_tool_result(&result_text, &tc.function.name, &tc.id);
+                    session.messages.push(Message {
+                        role: "tool".to_string(),
+                        content: Some(result_text),
+                        tool_calls: None,
+                        tool_call_id: Some(tc.id.clone()),
+                        name: Some("todo".to_string()),
+                    });
+                    tool_calls_made += 1;
+
+                    // Emit ToolCompleted for todo
+                    if let Some(ref cb) = event_callback {
+                        cb(AgentEvent::ToolCompleted {
+                            tool: "todo".to_string(),
+                            call_id: tc.id.clone(),
+                            duration_ms: 0,
+                            success: true,
+                            result_preview: format!("{} items", self.todos.len()),
+                        });
+                    }
+                    continue;
+                }
+
                 debug!("Dispatching tool: {} with args: {}", tc.function.name, args);
 
+                let start = std::time::Instant::now();
                 let result = self
                     .tool_registry
                     .dispatch_sync(&tc.function.name, args, &tool_ctx);
+                let duration = start.elapsed();
+
+                // Emit ToolCompleted event
+                if let Some(ref cb) = event_callback {
+                    let (success, preview) = match &result {
+                        Ok(tr) => (tr.success, truncate_preview(&tr.output.to_string(), 100)),
+                        Err(e) => (false, truncate_preview(&e.to_string(), 100)),
+                    };
+                    cb(AgentEvent::ToolCompleted {
+                        tool: tc.function.name.clone(),
+                        call_id: tc.id.clone(),
+                        duration_ms: duration.as_millis() as u64,
+                        success,
+                        result_preview: preview,
+                    });
+                }
 
                 let result_text = match result {
                     Ok(tr) => serde_json::to_string(&tr).unwrap_or_else(|_| {
@@ -406,7 +493,7 @@ impl Agent {
         &self,
         messages: &[Message],
         tools: &Option<Vec<Value>>,
-        stream_callback: &Option<StreamCallback>,
+        event_callback: &Option<EventCallback>,
     ) -> Result<crate::llm::types::ChatResponse, CoreError> {
         const MAX_RETRIES: u32 = 3;
         let mut last_err: Option<CoreError> = None;
@@ -418,8 +505,8 @@ impl Agent {
                 debug!("Retrying LLM call (attempt {})", attempt + 1);
             }
 
-            let result = if stream_callback.is_some() {
-                self.call_llm_streaming(messages, tools, stream_callback)
+            let result = if event_callback.is_some() {
+                self.call_llm_streaming(messages, tools, event_callback)
                     .await
             } else {
                 self.llm_client.chat(messages.to_vec(), tools.clone()).await
@@ -443,7 +530,7 @@ impl Agent {
         &self,
         messages: &[Message],
         tools: &Option<Vec<Value>>,
-        stream_callback: &Option<StreamCallback>,
+        event_callback: &Option<EventCallback>,
     ) -> Result<crate::llm::types::ChatResponse, CoreError> {
         use crate::llm::types::{
             ChatResponse, Choice, FunctionCall, ResponseMessage, ToolCall, Usage,
@@ -504,9 +591,11 @@ impl Agent {
                 if let Some(ref delta_content) = choice.delta.content {
                     content.push_str(delta_content);
                     if !delta_content.is_empty()
-                        && let Some(cb) = stream_callback
+                        && let Some(cb) = event_callback
                     {
-                        cb(delta_content);
+                        cb(AgentEvent::TextDelta {
+                            content: delta_content.clone(),
+                        });
                     }
                 }
 
@@ -585,6 +674,54 @@ impl Agent {
             CoreError::LlmRequest(_) => true, // network / timeout errors
             _ => false,
         }
+    }
+
+    /// Handle the built-in `todo` tool call.
+    fn handle_todo_call(
+        &mut self,
+        args_json: &str,
+        event_callback: &Option<EventCallback>,
+    ) -> ToolResult {
+        let args: Value = serde_json::from_str(args_json).unwrap_or_default();
+        let action = args["action"].as_str().unwrap_or("set");
+
+        match action {
+            "set" => {
+                if let Some(items) = args["todos"].as_array() {
+                    self.todos = items
+                        .iter()
+                        .filter_map(|v| {
+                            Some(TodoItem {
+                                content: v["content"].as_str()?.to_string(),
+                                status: v["status"].as_str()?.to_string(),
+                            })
+                        })
+                        .collect();
+                }
+            }
+            "update" => {
+                if let (Some(idx), Some(status)) =
+                    (args["index"].as_u64(), args["status"].as_str())
+                    && let Some(item) = self.todos.get_mut(idx as usize)
+                {
+                    item.status = status.to_string();
+                }
+            }
+            other => {
+                return ToolResult::err(&format!("unknown todo action: {other}"));
+            }
+        }
+
+        if let Some(cb) = event_callback {
+            cb(AgentEvent::TodoUpdate {
+                todos: self.todos.clone(),
+            });
+        }
+
+        ToolResult::ok(serde_json::json!({
+            "success": true,
+            "count": self.todos.len(),
+        }))
     }
 }
 

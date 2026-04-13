@@ -11,8 +11,9 @@ use tokio::sync::mpsc;
 use tracing::error;
 use uuid::Uuid;
 
-use iron_core::agent::{Agent, AgentConfig, SessionState, StreamCallback};
+use iron_core::agent::{Agent, AgentConfig, SessionState};
 use iron_core::context_compressor::{AuxiliaryLlmConfig, CompressorConfig};
+use iron_core::event::{AgentEvent, EventCallback};
 use iron_core::llm::client::{LlmClient, LlmConfig};
 use iron_core::llm::types::Message;
 
@@ -254,8 +255,10 @@ async fn handle_streaming(state: Arc<AppState>, payload: ChatRequest) -> Respons
         }
 
         let tx_cb = tx.clone();
-        let callback: StreamCallback = Box::new(move |delta: &str| {
-            let _ = tx_cb.try_send(delta.to_string());
+        let callback: EventCallback = Box::new(move |event: AgentEvent| {
+            if let AgentEvent::TextDelta { content } = event {
+                let _ = tx_cb.try_send(content);
+            }
         });
 
         let result = agent.chat(&mut session, user_msg, Some(callback)).await;
