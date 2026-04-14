@@ -1113,3 +1113,60 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 }
+
+#[cfg(test)]
+mod tool_result_tests {
+    use super::*;
+
+    #[test]
+    fn test_small_result_passes_through() {
+        let result = "small result";
+        let output = truncate_tool_result(result, "test_tool", "call_1");
+        assert_eq!(output, result);
+    }
+
+    #[test]
+    fn test_large_result_truncated_with_preview() {
+        let result = "x".repeat(MAX_TOOL_RESULT_CHARS + 1000);
+        let output = truncate_tool_result(&result, "test_tool", "call_2");
+
+        // Should be much shorter than original
+        assert!(output.len() < result.len());
+        // Should contain truncation notice
+        assert!(output.contains("Result truncated"));
+        // Should mention file path
+        assert!(output.contains("/tmp/iron-hermes-results/"));
+        assert!(output.contains("call_2"));
+    }
+
+    #[test]
+    fn test_large_result_persisted_to_file() {
+        let result = "y".repeat(MAX_TOOL_RESULT_CHARS + 500);
+        let _ = truncate_tool_result(&result, "test_tool", "call_persist_test");
+
+        // File should exist
+        let path = format!("{}/call_persist_test.txt", TOOL_RESULT_PERSIST_DIR);
+        assert!(
+            std::path::Path::new(&path).exists(),
+            "Persisted file should exist at {path}"
+        );
+
+        // File content should match original
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(saved, result);
+
+        // Cleanup
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_truncation_notice_includes_read_file_hint() {
+        let result = "z".repeat(MAX_TOOL_RESULT_CHARS + 100);
+        let output = truncate_tool_result(&result, "test_tool", "call_hint_test");
+
+        assert!(output.contains("read_file"));
+        // Cleanup
+        let path = format!("{}/call_hint_test.txt", TOOL_RESULT_PERSIST_DIR);
+        let _ = std::fs::remove_file(&path);
+    }
+}
