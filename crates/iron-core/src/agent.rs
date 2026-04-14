@@ -894,3 +894,177 @@ fn epoch_days_to_ymd(days: i64) -> (i64, u32, u32) {
     let y = if m <= 2 { y + 1 } else { y };
     (y, m, d)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm::types::{FunctionCall, ToolCall};
+
+    fn msg(role: &str, content: &str) -> Message {
+        Message {
+            role: role.to_string(),
+            content: Some(content.to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        }
+    }
+
+    fn assistant_with_calls(call_ids: &[&str]) -> Message {
+        Message {
+            role: "assistant".to_string(),
+            content: Some(String::new()),
+            tool_calls: Some(
+                call_ids
+                    .iter()
+                    .map(|id| ToolCall {
+                        id: id.to_string(),
+                        r#type: "function".to_string(),
+                        function: FunctionCall {
+                            name: "test_tool".to_string(),
+                            arguments: "{}".to_string(),
+                        },
+                    })
+                    .collect(),
+            ),
+            tool_call_id: None,
+            name: None,
+        }
+    }
+
+    fn tool_result(call_id: &str) -> Message {
+        Message {
+            role: "tool".to_string(),
+            content: Some("result".to_string()),
+            tool_calls: None,
+            tool_call_id: Some(call_id.to_string()),
+            name: Some("test_tool".to_string()),
+        }
+    }
+
+    // ── sanitize_messages tests ──
+
+    #[test]
+    fn test_sanitize_removes_orphan_tool_result() {
+        let mut messages = vec![
+            msg("user", "hello"),
+            tool_result("orphan_call"), // no matching assistant
+            msg("assistant", "hi"),
+        ];
+        Agent::sanitize_messages(&mut messages);
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().all(|m| m.role != "tool"));
+    }
+
+    #[test]
+    fn test_sanitize_injects_stub_for_missing_result() {
+        let mut messages = vec![
+            msg("user", "hello"),
+            assistant_with_calls(&["call_1"]),
+            // no tool result for call_1
+            msg("user", "next"),
+        ];
+        Agent::sanitize_messages(&mut messages);
+        // Should have injected a stub
+        let tool_msgs: Vec<_> = messages.iter().filter(|m| m.role == "tool").collect();
+        assert_eq!(tool_msgs.len(), 1);
+        assert_eq!(tool_msgs[0].tool_call_id.as_deref(), Some("call_1"));
+        assert!(
+            tool_msgs[0]
+                .content
+                .as_deref()
+                .unwrap()
+                .contains("unavailable")
+        );
+    }
+
+    #[test]
+    fn test_sanitize_keeps_valid_pairs() {
+        let mut messages = vec![
+            msg("user", "hello"),
+            assistant_with_calls(&["call_1"]),
+            tool_result("call_1"),
+            msg("assistant", "done"),
+        ];
+        let orig_len = messages.len();
+        Agent::sanitize_messages(&mut messages);
+        assert_eq!(messages.len(), orig_len);
+    }
+
+    #[test]
+    fn test_sanitize_drops_invalid_role() {
+        let mut messages = vec![
+            msg("user", "hello"),
+            msg("invalid_role", "bad message"),
+            msg("assistant", "hi"),
+        ];
+        Agent::sanitize_messages(&mut messages);
+        assert_eq!(messages.len(), 2);
+        assert!(messages.iter().all(|m| m.role != "invalid_role"));
+    }
+
+    // ── deduplicate_tool_calls tests ──
+
+    #[test]
+    fn test_dedup_removes_duplicate_calls() {
+        let calls = vec![
+            ToolCall {
+                id: "c1".to_string(),
+                r#type: "function".to_string(),
+                function: FunctionCall {
+                    name: "read_file".to_string(),
+                    arguments: r#"{"path": "/tmp/a.txt"}"#.to_string(),
+                },
+            },
+            ToolCall {
+                id: "c2".to_string(),
+                r#type: "function".to_string(),
+                function: FunctionCall {
+                    name: "read_file".to_string(),
+                    arguments: r#"{"path": "/tmp/a.txt"}"#.to_string(),
+                },
+            },
+        ];
+        let result = Agent::deduplicate_tool_calls(calls);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, "c1");
+    }
+
+    #[test]
+    fn test_dedup_keeps_different_args() {
+        let calls = vec![
+            ToolCall {
+                id: "c1".to_string(),
+                r#type: "function".to_string(),
+                function: FunctionCall {
+                    name: "read_file".to_string(),
+                    arguments: r#"{"path": "/tmp/a.txt"}"#.to_string(),
+                },
+            },
+            ToolCall {
+                id: "c2".to_string(),
+                r#type: "function".to_string(),
+                function: FunctionCall {
+                    name: "read_file".to_string(),
+                    arguments: r#"{"path": "/tmp/b.txt"}"#.to_string(),
+                },
+            },
+        ];
+        let result = Agent::deduplicate_tool_calls(calls);
+        assert_eq!(result.len(), 2);
+    }
+
+    #[test]
+    fn test_dedup_no_duplicates_returns_same() {
+        let calls = vec![ToolCall {
+            id: "c1".to_string(),
+            r#type: "function".to_string(),
+            function: FunctionCall {
+                name: "read_file".to_string(),
+                arguments: "{}".to_string(),
+            },
+        }];
+        let result = Agent::deduplicate_tool_calls(calls);
+        assert_eq!(result.len(), 1);
+    }
+}
