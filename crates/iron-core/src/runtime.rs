@@ -380,6 +380,12 @@ impl AgentRuntime {
         };
         drop(cfg);
 
+        // Load SOUL.md identity if present
+        let mut agent_config = agent_config;
+        if agent_config.identity.is_none() {
+            agent_config.identity = load_soul_md();
+        }
+
         let llm_client = LlmClient::new(llm_config);
         Agent::new(
             llm_client,
@@ -401,5 +407,33 @@ impl AgentRuntime {
                 last_used: Instant::now(),
             },
         );
+    }
+}
+
+/// Load `~/.iron-hermes/SOUL.md` if it exists and is non-empty.
+///
+/// Returns `Some(content)` with the file contents, or `None` if the file
+/// does not exist or is empty.  Used as the agent identity (slot #1 in
+/// the system prompt).
+fn load_soul_md() -> Option<String> {
+    let home = dirs::home_dir()?;
+    let path = home.join(".iron-hermes").join("SOUL.md");
+    if !path.exists() {
+        return None;
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => {
+            let trimmed = content.trim().to_string();
+            if trimmed.is_empty() {
+                None
+            } else {
+                debug!("Loaded SOUL.md identity ({} chars)", trimmed.len());
+                Some(trimmed)
+            }
+        }
+        Err(e) => {
+            debug!("Could not read SOUL.md: {e}");
+            None
+        }
     }
 }
