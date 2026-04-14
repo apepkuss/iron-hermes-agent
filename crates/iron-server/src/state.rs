@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, RwLock};
 
 use iron_core::runtime::{AgentRuntime, RuntimeConfig as CoreRuntimeConfig};
+use iron_core::todo::{new_todo_senders, new_todo_state, register_todo};
 use iron_memory::manager::MemoryManager;
 use iron_memory::tool_module::MemoryTools;
 use iron_sandbox::tool_module::register_execute_code;
@@ -60,6 +61,15 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         module.register(&mut registry);
     }
 
+    // Register todo tool
+    let todo_state = new_todo_state();
+    let todo_senders = new_todo_senders();
+    register_todo(
+        &mut registry,
+        Arc::clone(&todo_state),
+        Arc::clone(&todo_senders),
+    );
+
     // Register execute_code using a OnceLock to break the circular dependency:
     // the handler needs Arc<ToolRegistry> for sandbox RPC dispatch, but
     // ToolRegistry must be fully built before it can be wrapped in Arc.
@@ -94,6 +104,8 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         Arc::clone(&tool_registry),
         Arc::clone(&memory_manager),
         Arc::clone(&skill_manager),
+        todo_senders,
+        todo_state,
     ));
 
     AppState {

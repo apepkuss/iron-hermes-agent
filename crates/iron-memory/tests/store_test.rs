@@ -50,9 +50,10 @@ fn test_replace_entry() {
     // Verify the new content is live
     let result2 = store.add("memory", "New content here").unwrap();
     assert!(
-        !result2.success,
-        "duplicate of replaced entry should be rejected"
+        result2.success,
+        "duplicate of replaced entry should succeed (idempotent)"
     );
+    assert!(result2.message.contains("already exists"));
 }
 
 // 4. Remove an entry — verify count = 0
@@ -108,12 +109,14 @@ fn test_persistence_across_loads() {
     );
     store2.load_from_disk().unwrap();
 
-    // Duplicate adds should fail → entries survived reload
+    // Duplicate adds should succeed (idempotent) → entries survived reload
     let r1 = store2.add("memory", "Persistent memory entry").unwrap();
-    assert!(!r1.success, "entry should already exist after reload");
+    assert!(r1.success, "entry should already exist after reload");
+    assert!(r1.message.contains("already exists"));
 
     let r2 = store2.add("user", "Persistent user entry").unwrap();
-    assert!(!r2.success, "entry should already exist after reload");
+    assert!(r2.success, "entry should already exist after reload");
+    assert!(r2.message.contains("already exists"));
 }
 
 // 7. Frozen snapshot not affected by writes
@@ -172,9 +175,9 @@ fn test_duplicate_detection() {
     assert!(r1.success);
 
     let r2 = store.add("memory", "Unique entry content").unwrap();
-    assert!(!r2.success, "duplicate should be rejected");
+    assert!(r2.success, "duplicate should succeed (idempotent)");
     assert!(
-        r2.message.contains("duplicate"),
+        r2.message.contains("already exists"),
         "unexpected message: {}",
         r2.message
     );

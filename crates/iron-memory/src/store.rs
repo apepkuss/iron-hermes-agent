@@ -195,11 +195,11 @@ impl MemoryStore {
 
         let trimmed = content.trim().to_string();
 
-        // Duplicate check
+        // Duplicate check — treat as success so the model does not retry.
         if self.entries(target).contains(&trimmed) {
             return Ok(MemoryToolResult {
-                success: false,
-                message: "Rejected: duplicate entry.".to_string(),
+                success: true,
+                message: format!("Entry \"{}\" already exists, no action needed.", trimmed),
                 entry_count: self.entries(target).len(),
                 usage: Self::usage_string(self.entries(target), self.char_limit(target)),
             });

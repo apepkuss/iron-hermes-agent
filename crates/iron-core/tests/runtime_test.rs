@@ -45,6 +45,8 @@ fn make_test_runtime(tmp_dir: &tempfile::TempDir) -> AgentRuntime {
         tool_registry,
         memory_manager,
         skill_manager,
+        iron_core::todo::new_todo_senders(),
+        iron_core::todo::new_todo_state(),
     )
 }
 

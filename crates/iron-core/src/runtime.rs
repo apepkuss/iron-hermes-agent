@@ -12,6 +12,7 @@ use crate::error::CoreError;
 use crate::event::EventCallback;
 use crate::llm::client::{LlmClient, LlmConfig};
 use crate::llm::types::Message;
+use crate::todo::{TodoSenders, TodoState, create_todo_channel};
 
 use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
@@ -151,6 +152,8 @@ pub struct AgentRuntime {
     tool_registry: Arc<ToolRegistry>,
     memory_manager: Arc<Mutex<MemoryManager>>,
     skill_manager: Arc<SkillManager>,
+    todo_senders: TodoSenders,
+    todo_state: TodoState,
 }
 
 impl AgentRuntime {
@@ -160,6 +163,8 @@ impl AgentRuntime {
         tool_registry: Arc<ToolRegistry>,
         memory_manager: Arc<Mutex<MemoryManager>>,
         skill_manager: Arc<SkillManager>,
+        todo_senders: TodoSenders,
+        todo_state: TodoState,
     ) -> Self {
         Self {
             config: RwLock::new(config),
@@ -170,6 +175,8 @@ impl AgentRuntime {
             tool_registry,
             memory_manager,
             skill_manager,
+            todo_senders,
+            todo_state,
         }
     }
 
@@ -294,7 +301,7 @@ impl AgentRuntime {
         // 2. Compute config signature and obtain an agent.
         let signature = compute_config_signature(&agent_config);
         let mut agent = self
-            .get_or_create_agent(key, &signature, agent_config)
+            .get_or_create_agent(key, &signature, agent_config, &session_entry.session_id)
             .await;
 
         // Load the session id into the agent.
@@ -406,6 +413,7 @@ impl AgentRuntime {
         key: &str,
         signature: &str,
         agent_config: AgentConfig,
+        session_id: &str,
     ) -> Agent {
         {
             let mut agents = self.agents.lock().await;
@@ -445,12 +453,15 @@ impl AgentRuntime {
         }
 
         let llm_client = LlmClient::new(llm_config);
+        let todo_rx = create_todo_channel(&self.todo_senders, session_id);
         Agent::new(
             llm_client,
             Arc::clone(&self.tool_registry),
             Arc::clone(&self.memory_manager),
             Arc::clone(&self.skill_manager),
             agent_config,
+            Some(todo_rx),
+            Some(Arc::clone(&self.todo_state)),
         )
     }
 
@@ -520,6 +531,8 @@ impl AgentRuntime {
                 memory_manager,
                 skill_manager,
                 review_config,
+                None,
+                None,
             );
 
             // Load the conversation history

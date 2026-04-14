@@ -11,6 +11,7 @@ use crate::llm::client::LlmClient;
 use crate::llm::types::Message;
 use crate::prompt::{PromptBuilder, PromptContext};
 use crate::session::types::TokenUsage;
+use crate::todo::{TodoEventReceiver, TodoState};
 
 use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
@@ -103,6 +104,8 @@ pub struct Agent {
     config: AgentConfig,
     context_compressor: Option<ContextCompressor>,
     session: SessionState,
+    todo_event_rx: Option<TodoEventReceiver>,
+    todo_state: Option<TodoState>,
 }
 
 impl Agent {
@@ -113,6 +116,8 @@ impl Agent {
         memory_manager: Arc<Mutex<MemoryManager>>,
         skill_manager: Arc<SkillManager>,
         config: AgentConfig,
+        todo_event_rx: Option<TodoEventReceiver>,
+        todo_state: Option<TodoState>,
     ) -> Self {
         let context_compressor = config
             .compressor_config
@@ -126,6 +131,8 @@ impl Agent {
             config,
             context_compressor,
             session: SessionState::new(String::new()),
+            todo_event_rx,
+            todo_state,
         }
     }
 
@@ -305,10 +312,13 @@ impl Agent {
 
             last_content = assistant_content;
 
-            // e. If no tool calls — we're done.
+            // e. If no tool calls — mark remaining todo items as completed and break.
             let calls = match tool_calls {
                 Some(ref tc) if !tc.is_empty() => tc.clone(),
-                _ => break,
+                _ => {
+                    self.finalize_todo(&event_callback);
+                    break;
+                }
             };
 
             // Guard rail: deduplicate tool calls (same name + args in one turn).
@@ -355,8 +365,10 @@ impl Agent {
                 let args: Value = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(Value::Object(serde_json::Map::new()));
 
-                // Emit ToolStarted event
-                if let Some(ref cb) = event_callback {
+                let is_todo = tc.function.name == "todo";
+
+                // Emit ToolStarted event (skip for todo — it has its own TodoUpdate event)
+                if !is_todo && let Some(ref cb) = event_callback {
                     let preview = build_args_preview(&tc.function.arguments);
                     cb(AgentEvent::ToolStarted {
                         tool: tc.function.name.clone(),
@@ -373,28 +385,38 @@ impl Agent {
                     .dispatch_sync(&tc.function.name, args, &tool_ctx);
                 let duration = start.elapsed();
 
-                // Emit ToolCompleted event
                 if let Some(ref cb) = event_callback {
-                    let (success, preview) = match &result {
-                        Ok(tr) => {
-                            let output_str = tr.output.to_string();
-                            let size = output_str.len();
-                            let size_str = if size >= 1024 {
-                                format!("{:.1}KB", size as f64 / 1024.0)
-                            } else {
-                                format!("{}B", size)
-                            };
-                            (tr.success, format!("returned {size_str}"))
+                    // Emit ToolCompleted event (skip for todo)
+                    if !is_todo {
+                        let (success, preview) = match &result {
+                            Ok(tr) => {
+                                let output_str = tr.output.to_string();
+                                let size = output_str.len();
+                                let size_str = if size >= 1024 {
+                                    format!("{:.1}KB", size as f64 / 1024.0)
+                                } else {
+                                    format!("{}B", size)
+                                };
+                                (tr.success, format!("returned {size_str}"))
+                            }
+                            Err(e) => (false, truncate_preview(&e.to_string(), 100)),
+                        };
+                        cb(AgentEvent::ToolCompleted {
+                            tool: tc.function.name.clone(),
+                            call_id: tc.id.clone(),
+                            duration_ms: duration.as_millis() as u64,
+                            success,
+                            result_preview: preview,
+                        });
+                    }
+
+                    // Relay any pending TodoUpdate events from the todo tool handler.
+                    if let Some(ref rx) = self.todo_event_rx {
+                        let rx = rx.lock().unwrap();
+                        while let Ok(todos) = rx.try_recv() {
+                            cb(AgentEvent::TodoUpdate { todos });
                         }
-                        Err(e) => (false, truncate_preview(&e.to_string(), 100)),
-                    };
-                    cb(AgentEvent::ToolCompleted {
-                        tool: tc.function.name.clone(),
-                        call_id: tc.id.clone(),
-                        duration_ms: duration.as_millis() as u64,
-                        success,
-                        result_preview: preview,
-                    });
+                    }
                 }
 
                 let result_text = match result {
@@ -470,6 +492,31 @@ impl Agent {
     }
 
     // ─── Private helpers ───
+
+    /// Mark all non-completed todo items as completed and send a final TodoUpdate event.
+    fn finalize_todo(&self, event_callback: &Option<EventCallback>) {
+        let (todo_state, cb) = match (&self.todo_state, event_callback) {
+            (Some(state), Some(cb)) => (state, cb),
+            _ => return,
+        };
+
+        let mut map = todo_state.lock().unwrap();
+        let session_id = &self.session.session_id;
+        if let Some(todos) = map.get_mut(session_id) {
+            let mut changed = false;
+            for item in todos.iter_mut() {
+                if item.status != "completed" {
+                    item.status = "completed".to_string();
+                    changed = true;
+                }
+            }
+            if changed {
+                cb(AgentEvent::TodoUpdate {
+                    todos: todos.clone(),
+                });
+            }
+        }
+    }
 
     /// Return tool names filtered by enabled/disabled toolsets.
     fn filtered_tool_names(&self) -> std::collections::HashSet<String> {
