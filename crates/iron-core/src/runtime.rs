@@ -11,6 +11,7 @@ use crate::context_compressor::CompressorConfig;
 use crate::error::CoreError;
 use crate::event::EventCallback;
 use crate::llm::client::{LlmClient, LlmConfig};
+use crate::llm::types::Message;
 
 use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
@@ -49,6 +50,8 @@ pub struct SessionEntry {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub message_count: u32,
+    /// Turns since last background review (memory/skill). Resets after review.
+    pub turns_since_review: u32,
 }
 
 // ─── RuntimeConfig ───
@@ -69,6 +72,8 @@ pub struct RuntimeConfig {
     pub llm_api_key: Option<String>,
     /// LLM model name.
     pub llm_model: String,
+    /// Number of user turns between background reviews (0 = disabled). Default: 10.
+    pub review_interval: u32,
 }
 
 impl Default for RuntimeConfig {
@@ -81,6 +86,7 @@ impl Default for RuntimeConfig {
             llm_base_url: String::from("http://localhost:11434"),
             llm_api_key: None,
             llm_model: String::from("gpt-4o"),
+            review_interval: 10,
         }
     }
 }
@@ -186,6 +192,7 @@ impl AgentRuntime {
             input_tokens: 0,
             output_tokens: 0,
             message_count: 0,
+            turns_since_review: 0,
         };
 
         let mut sessions = self.sessions.write().await;
@@ -321,15 +328,33 @@ impl AgentRuntime {
         match chat_result {
             Ok(Ok(response)) => {
                 // 5a. Update session stats.
-                {
+                let should_review = {
                     let mut sessions = self.sessions.write().await;
                     if let Some(entry) = sessions.get_mut(key) {
                         entry.input_tokens += response.usage.prompt_tokens as u64;
                         entry.output_tokens += response.usage.completion_tokens as u64;
                         entry.message_count += 1;
+                        entry.turns_since_review += 1;
                         entry.updated_at = Instant::now();
+
+                        let interval = self.config.read().await.review_interval;
+                        if interval > 0 && entry.turns_since_review >= interval {
+                            entry.turns_since_review = 0;
+                            true
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
                     }
+                };
+
+                // 5b. Spawn background review if due.
+                if should_review {
+                    let messages_snapshot = agent.session().messages.clone();
+                    self.spawn_background_review(messages_snapshot).await;
                 }
+
                 self.cache_agent(key, agent, &signature).await;
                 debug!("Agent completed successfully for session {key}");
                 Ok(response)
@@ -412,6 +437,84 @@ impl AgentRuntime {
         );
     }
 }
+
+// ─── Background Review ───
+
+/// Review prompt sent to a background agent to check if memory or skills
+/// should be updated based on the conversation so far.
+const BACKGROUND_REVIEW_PROMPT: &str = "\
+Review the conversation above and consider two things:\n\n\
+**Memory**: Has the user revealed things about themselves — their persona, \
+preferences, or personal details? Has the user expressed expectations about \
+how you should behave or operate? If so, save using the memory tool.\n\n\
+**Skills**: Was a non-trivial approach used to complete a task that required \
+trial and error, or changing course? If a relevant skill already exists, \
+update it. Otherwise, create a new one if the approach is reusable.\n\n\
+Only act if there's something genuinely worth saving. \
+If nothing stands out, just say 'Nothing to save.' and stop.";
+
+impl AgentRuntime {
+    /// Spawn a background review agent that scans the conversation for
+    /// memory/skill save opportunities. Runs silently with max 8 iterations
+    /// and shared memory/skill stores.
+    async fn spawn_background_review(&self, messages_snapshot: Vec<Message>) {
+        let cfg = self.config.read().await;
+        let llm_config = LlmConfig {
+            base_url: cfg.llm_base_url.clone(),
+            api_key: cfg.llm_api_key.clone(),
+            model: cfg.llm_model.clone(),
+            temperature: None,
+            max_tokens: None,
+        };
+        drop(cfg);
+
+        let tool_registry = Arc::clone(&self.tool_registry);
+        let memory_manager = Arc::clone(&self.memory_manager);
+        let skill_manager = Arc::clone(&self.skill_manager);
+
+        tokio::spawn(async move {
+            debug!(
+                "Background review started ({} messages)",
+                messages_snapshot.len()
+            );
+
+            let review_config = AgentConfig {
+                max_iterations: 8,
+                ..AgentConfig::default()
+            };
+
+            let llm_client = LlmClient::new(llm_config);
+            let mut review_agent = Agent::new(
+                llm_client,
+                tool_registry,
+                memory_manager,
+                skill_manager,
+                review_config,
+            );
+
+            // Load the conversation history
+            review_agent.load_history(messages_snapshot);
+
+            // Run the review (silently, no event callback)
+            match review_agent
+                .chat(BACKGROUND_REVIEW_PROMPT.to_string(), None)
+                .await
+            {
+                Ok(resp) => {
+                    debug!(
+                        "Background review completed: {} tool calls, status: {:?}",
+                        resp.tool_calls_made, resp.status
+                    );
+                }
+                Err(e) => {
+                    debug!("Background review failed: {e}");
+                }
+            }
+        });
+    }
+}
+
+// ─── File Loaders ───
 
 /// Load `~/.iron-hermes/SOUL.md` if it exists and is non-empty.
 ///

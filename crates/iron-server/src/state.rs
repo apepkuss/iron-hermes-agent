@@ -96,6 +96,7 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         llm_base_url: config.llm_base_url.clone(),
         llm_api_key: config.llm_api_key.clone(),
         llm_model: config.llm_model.clone(),
+        review_interval: 10,
     };
 
     let runtime = Arc::new(AgentRuntime::new(
