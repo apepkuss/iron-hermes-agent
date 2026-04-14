@@ -850,6 +850,39 @@ html, body {
   background: var(--border);
   border-radius: 2px;
 }
+
+.toolset-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toolset-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.toolset-toggle label {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.toolset-toggle .tool-count {
+  font-size: 10px;
+  color: #AAA;
+  margin-left: 4px;
+}
+
+.toolset-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--text);
+}
 </style>
 </head>
 <body>
@@ -954,6 +987,14 @@ html, body {
         min="1"
       >
       <span class="settings-hint">Leave empty for auto-detection</span>
+    </div>
+
+    <!-- Toolsets -->
+    <div class="settings-group">
+      <label class="settings-label">TOOLSETS</label>
+      <div id="toolsetToggles" class="toolset-toggles">
+        <!-- Populated dynamically from /api/toolsets -->
+      </div>
     </div>
   </div>
 
@@ -1097,6 +1138,33 @@ html, body {
     }, 600);
   });
 
+  // ── Load toolset toggles ──
+  async function loadToolsets() {
+    try {
+      var resp = await fetch('/api/toolsets');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      var container = document.getElementById('toolsetToggles');
+      if (!container || !data.toolsets) return;
+      container.innerHTML = '';
+      data.toolsets.forEach(function(ts) {
+        var div = document.createElement('div');
+        div.className = 'toolset-toggle';
+        var label = document.createElement('label');
+        label.innerHTML = ts.name + '<span class="tool-count">(' + ts.tool_count + ')</span>';
+        label.setAttribute('for', 'ts-' + ts.name);
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.id = 'ts-' + ts.name;
+        cb.checked = ts.enabled;
+        cb.dataset.toolset = ts.name;
+        div.appendChild(label);
+        div.appendChild(cb);
+        container.appendChild(div);
+      });
+    } catch (e) {}
+  }
+
   // ── Slider live update ──
   compressionSlider.addEventListener('input', function() {
     sliderValueDisplay.textContent = compressionSlider.value + '%';
@@ -1107,6 +1175,7 @@ html, body {
     settingsPanel.classList.add('open');
     settingsBackdrop.classList.add('open');
     settingsBtn.classList.add('active');
+    loadToolsets();
   }
 
   function closeSettings() {
@@ -1139,11 +1208,19 @@ html, body {
     settingsStatus.textContent = '';
     settingsStatus.className = 'settings-status';
 
+    var disabledToolsets = [];
+    document.querySelectorAll('#toolsetToggles input[type="checkbox"]').forEach(function(cb) {
+      if (!cb.checked) {
+        disabledToolsets.push(cb.dataset.toolset);
+      }
+    });
+
     const payload = {
       provider_url: providerUrlInput.value.trim() || null,
       aux_model: auxModelSelect.value || null,
       compression_threshold: parseFloat(compressionSlider.value) / 100,
-      context_length: contextLengthInput.value ? parseInt(contextLengthInput.value, 10) : null
+      context_length: contextLengthInput.value ? parseInt(contextLengthInput.value, 10) : null,
+      disabled_toolsets: disabledToolsets
     };
 
     try {
