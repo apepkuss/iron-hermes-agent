@@ -216,6 +216,10 @@ impl Agent {
             // Conversation messages.
             api_messages.extend(self.session.messages.clone());
 
+            // Guard rail: sanitize messages before LLM call.
+            // Removes orphaned tool results and injects stubs for missing results.
+            Self::sanitize_messages(&mut api_messages);
+
             // Budget warning is injected into the last tool result (see post-tool section),
             // not as a separate system message — this preserves prompt cache.
 
@@ -301,6 +305,9 @@ impl Agent {
                 Some(ref tc) if !tc.is_empty() => tc.clone(),
                 _ => break,
             };
+
+            // Guard rail: deduplicate tool calls (same name + args in one turn).
+            let calls = Self::deduplicate_tool_calls(calls);
 
             // f. Validate tool calls.
             let mut has_invalid = false;
@@ -697,6 +704,125 @@ impl Agent {
             CoreError::LlmRequest(_) => true, // network / timeout errors
             _ => false,
         }
+    }
+
+    // ─── Guard Rails ───
+
+    /// Sanitize messages before LLM call: remove orphaned tool results,
+    /// inject stubs for missing tool results, drop invalid roles.
+    fn sanitize_messages(messages: &mut Vec<Message>) {
+        // Collect all tool_call IDs from assistant messages
+        let mut call_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for msg in messages.iter() {
+            if msg.role == "assistant"
+                && let Some(ref calls) = msg.tool_calls
+            {
+                for tc in calls {
+                    call_ids.insert(tc.id.clone());
+                }
+            }
+        }
+
+        // Collect all tool_call_ids referenced by tool results
+        let mut result_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for msg in messages.iter() {
+            if msg.role == "tool"
+                && let Some(ref id) = msg.tool_call_id
+            {
+                result_ids.insert(id.clone());
+            }
+        }
+
+        // 1. Remove orphaned tool results (no matching assistant call)
+        let orphaned = result_ids
+            .difference(&call_ids)
+            .cloned()
+            .collect::<Vec<_>>();
+        if !orphaned.is_empty() {
+            let orphan_set: std::collections::HashSet<String> = orphaned.into_iter().collect();
+            messages.retain(|m| {
+                !(m.role == "tool"
+                    && m.tool_call_id
+                        .as_ref()
+                        .is_some_and(|id| orphan_set.contains(id)))
+            });
+            debug!(
+                "Guard rail: removed {} orphaned tool result(s)",
+                orphan_set.len()
+            );
+        }
+
+        // 2. Inject stub results for calls with no matching result
+        let missing = call_ids
+            .difference(&result_ids)
+            .cloned()
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            let missing_set: std::collections::HashSet<String> = missing.into_iter().collect();
+            let mut patched = Vec::with_capacity(messages.len() + missing_set.len());
+            for msg in messages.drain(..) {
+                let inject_after = if msg.role == "assistant" {
+                    msg.tool_calls.as_ref().map_or(vec![], |calls| {
+                        calls
+                            .iter()
+                            .filter(|tc| missing_set.contains(&tc.id))
+                            .map(|tc| (tc.id.clone(), tc.function.name.clone()))
+                            .collect()
+                    })
+                } else {
+                    vec![]
+                };
+                patched.push(msg);
+                for (cid, name) in inject_after {
+                    patched.push(Message {
+                        role: "tool".to_string(),
+                        content: Some(
+                            "[Result unavailable — see context summary above]".to_string(),
+                        ),
+                        tool_calls: None,
+                        tool_call_id: Some(cid),
+                        name: Some(name),
+                    });
+                }
+            }
+            debug!(
+                "Guard rail: injected {} stub tool result(s)",
+                missing_set.len()
+            );
+            *messages = patched;
+        }
+
+        // 3. Drop messages with invalid roles
+        let valid_roles = ["system", "user", "assistant", "tool"];
+        messages.retain(|m| {
+            if valid_roles.contains(&m.role.as_str()) {
+                true
+            } else {
+                debug!("Guard rail: dropped message with invalid role '{}'", m.role);
+                false
+            }
+        });
+    }
+
+    /// Deduplicate tool calls: remove calls with identical (name, arguments).
+    fn deduplicate_tool_calls(
+        calls: Vec<crate::llm::types::ToolCall>,
+    ) -> Vec<crate::llm::types::ToolCall> {
+        let mut seen: std::collections::HashSet<(String, String)> =
+            std::collections::HashSet::new();
+        let mut unique = Vec::with_capacity(calls.len());
+        for tc in calls {
+            let key = (tc.function.name.clone(), tc.function.arguments.clone());
+            if seen.insert(key) {
+                unique.push(tc);
+            } else {
+                debug!(
+                    "Guard rail: removed duplicate tool call '{}'",
+                    tc.function.name
+                );
+            }
+        }
+        unique
     }
 }
 
