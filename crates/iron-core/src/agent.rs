@@ -157,7 +157,13 @@ impl Agent {
     ) -> Result<AgentResponse, CoreError> {
         // 1. Build system prompt if not already set.
         if self.session.system_prompt.is_none() {
-            self.session.system_prompt = Some(self.build_system_prompt());
+            let prompt = self.build_system_prompt();
+            debug!(
+                "System prompt built ({} chars), identity: {:?}",
+                prompt.len(),
+                self.config.identity.as_deref().map(|s| &s[..s.len().min(80)])
+            );
+            self.session.system_prompt = Some(prompt);
         }
 
         // 2. Append user message.
