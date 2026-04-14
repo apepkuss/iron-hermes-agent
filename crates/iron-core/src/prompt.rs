@@ -111,6 +111,8 @@ pub struct PromptContext {
     pub session_id: String,
     /// Current date in ISO-8601 format (included in metadata).
     pub current_date: String,
+    /// Names of tools available to the agent. Used for tool-aware prompt injection.
+    pub available_tools: std::collections::HashSet<String>,
 }
 
 /// Assembles the system prompt from multiple layers.
@@ -126,8 +128,8 @@ impl PromptBuilder {
     /// 2. Tool-use enforcement (only for models in [`TOOL_USE_ENFORCEMENT_MODELS`])
     /// 3. Google operational guidance (only for Gemini/Gemma)
     /// 4. Response format guidance (always)
-    /// 5. Memory guidance (always)
-    /// 6. Skills guidance (always)
+    /// 5. Memory guidance (only when `memory` tool is available)
+    /// 6. Skills guidance (only when `skill_manage` tool is available)
     /// 7. Custom system message (if set)
     /// 8. Memory block (if set)
     /// 9. Skills index (if set)
@@ -153,11 +155,15 @@ impl PromptBuilder {
         // 4. Response format guidance (always)
         sections.push(RESPONSE_FORMAT_GUIDANCE);
 
-        // 5. Memory guidance (always)
-        sections.push(MEMORY_GUIDANCE);
+        // 5. Memory guidance (only when memory tool is available)
+        if ctx.available_tools.contains("memory") {
+            sections.push(MEMORY_GUIDANCE);
+        }
 
-        // 6. Skills guidance (always)
-        sections.push(SKILLS_GUIDANCE);
+        // 6. Skills guidance (only when skill_manage tool is available)
+        if ctx.available_tools.contains("skill_manage") {
+            sections.push(SKILLS_GUIDANCE);
+        }
 
         // 7. Custom system message
         if let Some(ref msg) = ctx.custom_system_message {

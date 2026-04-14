@@ -161,7 +161,10 @@ impl Agent {
             debug!(
                 "System prompt built ({} chars), identity: {:?}",
                 prompt.len(),
-                self.config.identity.as_deref().map(|s| &s[..s.len().min(80)])
+                self.config
+                    .identity
+                    .as_deref()
+                    .map(|s| &s[..s.len().min(80)])
             );
             self.session.system_prompt = Some(prompt);
         }
@@ -456,6 +459,7 @@ impl Agent {
             model_name: self.config.model_name.clone(),
             session_id: self.session.session_id.clone(),
             current_date: chrono_today(),
+            available_tools: available_tools.clone(),
         };
 
         PromptBuilder::build(&ctx)
