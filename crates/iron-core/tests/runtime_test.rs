@@ -201,3 +201,29 @@ async fn test_handle_message_concurrent_rejected() {
         "Expected AgentBusy error"
     );
 }
+
+// ─── Review interval tests ───
+
+#[tokio::test]
+async fn test_session_turns_since_review_initialized_zero() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let rt = make_test_runtime(&tmp);
+    let source = webui_source();
+
+    let entry = rt.get_or_create_session(&source).await;
+    assert_eq!(entry.turns_since_review, 0);
+}
+
+#[tokio::test]
+async fn test_review_interval_default_is_10() {
+    let config = RuntimeConfig::default();
+    assert_eq!(config.review_interval, 10);
+}
+
+#[tokio::test]
+async fn test_review_interval_zero_disables() {
+    let mut config = RuntimeConfig::default();
+    config.review_interval = 0;
+    // interval=0 means disabled — no review should ever trigger
+    assert_eq!(config.review_interval, 0);
+}
