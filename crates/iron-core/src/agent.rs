@@ -32,6 +32,10 @@ pub struct AgentConfig {
     pub model_name: String,
     /// Optional context compressor configuration. When set, compression is enabled.
     pub compressor_config: Option<CompressorConfig>,
+    /// Only enable tools from these toolsets. Empty = all enabled.
+    pub enabled_toolsets: Vec<String>,
+    /// Disable tools from these toolsets. Applied after enabled_toolsets filter.
+    pub disabled_toolsets: Vec<String>,
 }
 
 impl Default for AgentConfig {
@@ -42,6 +46,8 @@ impl Default for AgentConfig {
             context_files: Vec::new(),
             model_name: String::from("unknown"),
             compressor_config: None,
+            enabled_toolsets: Vec::new(),
+            disabled_toolsets: Vec::new(),
         }
     }
 }
@@ -213,8 +219,8 @@ impl Agent {
             // Budget warning is injected into the last tool result (see post-tool section),
             // not as a separate system message — this preserves prompt cache.
 
-            // b. Get tool schemas.
-            let tool_names = self.tool_registry.tool_names();
+            // b. Get tool schemas (filtered by enabled/disabled toolsets).
+            let tool_names = self.filtered_tool_names();
             let tool_ctx = ToolContext {
                 task_id: self.session.session_id.clone(),
                 working_dir: std::env::current_dir().unwrap_or_default(),
@@ -455,6 +461,26 @@ impl Agent {
 
     // ─── Private helpers ───
 
+    /// Return tool names filtered by enabled/disabled toolsets.
+    fn filtered_tool_names(&self) -> std::collections::HashSet<String> {
+        self.tool_registry
+            .tool_names()
+            .into_iter()
+            .filter(|name| {
+                let toolset = self.tool_registry.toolset_of(name).unwrap_or("");
+                if !self.config.enabled_toolsets.is_empty()
+                    && !self.config.enabled_toolsets.iter().any(|s| s == toolset)
+                {
+                    return false;
+                }
+                if self.config.disabled_toolsets.iter().any(|s| s == toolset) {
+                    return false;
+                }
+                true
+            })
+            .collect()
+    }
+
     /// Build the system prompt using [`PromptBuilder`].
     fn build_system_prompt(&self) -> String {
         let memory_block = tokio::task::block_in_place(|| {
@@ -463,7 +489,7 @@ impl Agent {
                 mgr.system_prompt_block()
             })
         });
-        let available_tools = self.tool_registry.tool_names();
+        let available_tools = self.filtered_tool_names();
         let skills_index = self
             .skill_manager
             .build_system_prompt_index(&available_tools);
