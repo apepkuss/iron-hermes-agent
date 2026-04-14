@@ -380,10 +380,13 @@ impl AgentRuntime {
         };
         drop(cfg);
 
-        // Load SOUL.md identity if present
+        // Load SOUL.md identity and context files if present
         let mut agent_config = agent_config;
         if agent_config.identity.is_none() {
             agent_config.identity = load_soul_md();
+        }
+        if agent_config.context_files.is_empty() {
+            agent_config.context_files = load_context_files();
         }
 
         let llm_client = LlmClient::new(llm_config);
@@ -418,21 +421,64 @@ impl AgentRuntime {
 fn load_soul_md() -> Option<String> {
     let home = dirs::home_dir()?;
     let path = home.join(".iron-hermes").join("SOUL.md");
+    load_optional_file(&path, "SOUL.md")
+}
+
+/// Load context files from `~/.iron-hermes/`.
+///
+/// Checks for these files in priority order (first match wins):
+///   1. `AGENTS.md`
+///   2. `CLAUDE.md`
+///
+/// Returns a vec of loaded context strings (0 or 1 entry).
+/// Each file is capped at 20,000 characters.
+fn load_context_files() -> Vec<String> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+    let base = home.join(".iron-hermes");
+
+    const MAX_CONTEXT_CHARS: usize = 20_000;
+    let candidates = ["AGENTS.md", "CLAUDE.md"];
+
+    for name in &candidates {
+        let path = base.join(name);
+        if let Some(content) = load_optional_file(&path, name) {
+            let truncated = if content.len() > MAX_CONTEXT_CHARS {
+                debug!(
+                    "Context file {} truncated from {} to {} chars",
+                    name,
+                    content.len(),
+                    MAX_CONTEXT_CHARS
+                );
+                content[..MAX_CONTEXT_CHARS].to_string()
+            } else {
+                content
+            };
+            return vec![truncated];
+        }
+    }
+
+    Vec::new()
+}
+
+/// Load an optional file, returning its trimmed content or None.
+fn load_optional_file(path: &std::path::Path, label: &str) -> Option<String> {
     if !path.exists() {
         return None;
     }
-    match std::fs::read_to_string(&path) {
+    match std::fs::read_to_string(path) {
         Ok(content) => {
             let trimmed = content.trim().to_string();
             if trimmed.is_empty() {
                 None
             } else {
-                debug!("Loaded SOUL.md identity ({} chars)", trimmed.len());
+                debug!("Loaded {} ({} chars)", label, trimmed.len());
                 Some(trimmed)
             }
         }
         Err(e) => {
-            debug!("Could not read SOUL.md: {e}");
+            debug!("Could not read {}: {e}", label);
             None
         }
     }
