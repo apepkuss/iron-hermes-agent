@@ -427,8 +427,8 @@ fn load_soul_md() -> Option<String> {
 /// Load context files from `~/.iron-hermes/`.
 ///
 /// Checks for these files in priority order (first match wins):
-///   1. `AGENTS.md`
-///   2. `CLAUDE.md`
+///   1. `HERMES.md` (iron-hermes native)
+///   2. `AGENTS.md` (generic convention)
 ///
 /// Returns a vec of loaded context strings (0 or 1 entry).
 /// Each file is capped at 20,000 characters.
@@ -439,7 +439,7 @@ fn load_context_files() -> Vec<String> {
     let base = home.join(".iron-hermes");
 
     const MAX_CONTEXT_CHARS: usize = 20_000;
-    let candidates = ["AGENTS.md", "CLAUDE.md"];
+    let candidates = ["HERMES.md", "AGENTS.md"];
 
     for name in &candidates {
         let path = base.join(name);
