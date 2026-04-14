@@ -210,16 +210,8 @@ impl Agent {
             // Conversation messages.
             api_messages.extend(self.session.messages.clone());
 
-            // Inject budget warning as a system message if applicable.
-            if let Some(warning) = budget.budget_warning() {
-                api_messages.push(Message {
-                    role: "system".to_string(),
-                    content: Some(warning),
-                    tool_calls: None,
-                    tool_call_id: None,
-                    name: None,
-                });
-            }
+            // Budget warning is injected into the last tool result (see post-tool section),
+            // not as a separate system message — this preserves prompt cache.
 
             // b. Get tool schemas.
             let tool_names = self.tool_registry.tool_names();
@@ -413,7 +405,37 @@ impl Agent {
                 tool_calls_made += 1;
             }
 
-            // h. Post-tool — loop continues.
+            // h. Inject budget warning into the last tool result if applicable.
+            //    This is the hermes-agent pattern: inject into tool result JSON
+            //    rather than adding a separate system message, preserving prompt cache.
+            if let Some(warning) = budget.budget_warning() {
+                if let Some(last_tool_msg) = self
+                    .session
+                    .messages
+                    .iter_mut()
+                    .rev()
+                    .find(|m| m.role == "tool")
+                {
+                    if let Some(ref content) = last_tool_msg.content {
+                        // Try to inject as a JSON field
+                        if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(content) {
+                            if let Some(obj) = parsed.as_object_mut() {
+                                obj.insert(
+                                    "_budget_warning".to_string(),
+                                    serde_json::Value::String(warning),
+                                );
+                                last_tool_msg.content =
+                                    Some(serde_json::to_string(&parsed).unwrap_or_default());
+                            }
+                        } else {
+                            // Not JSON — append as text
+                            last_tool_msg.content = Some(format!("{content}\n\n{warning}"));
+                        }
+                    }
+                }
+            }
+
+            // i. Post-tool — loop continues.
         }
 
         // 5. Determine final status.
