@@ -840,7 +840,7 @@ fn chrono_today() -> String {
     format!("{y:04}-{m:02}-{d:02}")
 }
 
-// ─── Tool result size control (Layer 1 + Layer 2) ───
+// ─── Tool result size control (Layer 1 + Layer 2 + Layer 3) ───
 
 /// Maximum tool result size in characters (Layer 1).
 const MAX_TOOL_RESULT_CHARS: usize = 100_000;
@@ -848,11 +848,14 @@ const MAX_TOOL_RESULT_CHARS: usize = 100_000;
 /// Preview size for truncated results (Layer 2).
 const TOOL_RESULT_PREVIEW_CHARS: usize = 1_500;
 
+/// Directory for persisted oversized tool results (Layer 3).
+const TOOL_RESULT_PERSIST_DIR: &str = "/tmp/iron-hermes-results";
+
 /// Truncate a tool result if it exceeds the per-tool limit.
 ///
-/// Layer 1: Check against MAX_TOOL_RESULT_CHARS.
-/// Layer 2: If exceeded, return a preview (first TOOL_RESULT_PREVIEW_CHARS) with
-/// a truncation notice, so the LLM knows the result was shortened.
+/// Layer 1: Check against MAX_TOOL_RESULT_CHARS — pass through if within limit.
+/// Layer 2: Preview (first TOOL_RESULT_PREVIEW_CHARS chars).
+/// Layer 3: Persist full result to file so LLM can retrieve it with read_file.
 fn truncate_tool_result(result: &str, tool_name: &str, tool_call_id: &str) -> String {
     if result.len() <= MAX_TOOL_RESULT_CHARS {
         return result.to_string();
@@ -861,22 +864,64 @@ fn truncate_tool_result(result: &str, tool_name: &str, tool_call_id: &str) -> St
     let total_bytes = result.len();
     let total_kb = total_bytes / 1024;
 
-    // Take the preview, truncating at the last newline to avoid broken JSON/text.
+    // Layer 3: persist full result to file
+    let file_path = persist_tool_result(result, tool_call_id);
+
+    // Layer 2: take preview, truncating at last newline to avoid broken JSON/text
     let preview_end = result[..TOOL_RESULT_PREVIEW_CHARS]
         .rfind('\n')
         .unwrap_or(TOOL_RESULT_PREVIEW_CHARS);
     let preview = &result[..preview_end];
 
     warn!(
-        "Tool result from '{}' (call {}) truncated: {} KB -> {} char preview",
-        tool_name, tool_call_id, total_kb, preview_end
+        "Tool result from '{}' (call {}) truncated: {} KB -> {} char preview, full saved to {}",
+        tool_name,
+        tool_call_id,
+        total_kb,
+        preview_end,
+        file_path.as_deref().unwrap_or("(failed)")
     );
 
-    format!(
-        "{preview}\n\n[... Result truncated: {total_kb} KB total. \
-         Showing first {preview_end} chars. Use read_file or web_extract \
-         for targeted retrieval if you need more detail.]"
-    )
+    match file_path {
+        Some(path) => format!(
+            "{preview}\n\n[... Result truncated: {total_kb} KB total. \
+             Full output saved to: {path}\n\
+             Use the read_file tool to retrieve the full content if needed.]"
+        ),
+        None => format!(
+            "{preview}\n\n[... Result truncated: {total_kb} KB total. \
+             Showing first {preview_end} chars. Use read_file or web_extract \
+             for targeted retrieval if you need more detail.]"
+        ),
+    }
+}
+
+/// Persist a tool result to a file in TOOL_RESULT_PERSIST_DIR.
+/// Returns the file path on success, or None on failure.
+fn persist_tool_result(content: &str, tool_call_id: &str) -> Option<String> {
+    let dir = std::path::Path::new(TOOL_RESULT_PERSIST_DIR);
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        warn!("Failed to create tool result persist dir: {e}");
+        return None;
+    }
+
+    let filename = format!("{tool_call_id}.txt");
+    let path = dir.join(&filename);
+
+    match std::fs::write(&path, content) {
+        Ok(()) => {
+            debug!(
+                "Persisted tool result ({} bytes) to {}",
+                content.len(),
+                path.display()
+            );
+            Some(path.to_string_lossy().to_string())
+        }
+        Err(e) => {
+            warn!("Failed to persist tool result: {e}");
+            None
+        }
+    }
 }
 
 /// Convert days since Unix epoch to (year, month, day).
