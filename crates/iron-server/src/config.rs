@@ -104,6 +104,9 @@ pub struct RuntimeConfig {
     /// Seconds before an idle session is expired and cleaned up.
     #[serde(default = "default_session_idle_timeout_secs")]
     pub session_idle_timeout_secs: u64,
+    /// Toolsets to disable. Tools in these toolsets are not available to the agent.
+    #[serde(default)]
+    pub disabled_toolsets: Vec<String>,
 }
 
 fn default_agent_timeout_secs() -> u64 {

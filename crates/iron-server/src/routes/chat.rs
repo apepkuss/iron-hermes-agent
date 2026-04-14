@@ -151,9 +151,9 @@ async fn handle_non_streaming(
 
     let source = extract_session_source(&headers);
 
-    let compressor_config = {
+    let (compressor_config, disabled_toolsets) = {
         let rc = state.runtime_config.read().await;
-        build_compressor_config(&rc)
+        (build_compressor_config(&rc), rc.disabled_toolsets.clone())
     };
 
     let model_name = payload
@@ -165,6 +165,7 @@ async fn handle_non_streaming(
     let agent_config = AgentConfig {
         model_name: model_name.clone(),
         compressor_config,
+        disabled_toolsets,
         ..AgentConfig::default()
     };
 
@@ -244,9 +245,9 @@ async fn handle_streaming(
     // Channel for streaming events from the agent callback to the SSE response.
     let (tx, mut rx) = mpsc::channel::<AgentEvent>(256);
 
-    let compressor_config = {
+    let (compressor_config, disabled_toolsets) = {
         let rc = state.runtime_config.read().await;
-        build_compressor_config(&rc)
+        (build_compressor_config(&rc), rc.disabled_toolsets.clone())
     };
 
     let source = extract_session_source(&headers);
@@ -260,6 +261,7 @@ async fn handle_streaming(
         let agent_config = AgentConfig {
             model_name: request_model,
             compressor_config,
+            disabled_toolsets,
             ..AgentConfig::default()
         };
 

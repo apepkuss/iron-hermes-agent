@@ -84,6 +84,7 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         agent_timeout_secs: config.agent_timeout_secs,
         inactivity_timeout_secs: 300,
         session_idle_timeout_secs: 1800,
+        disabled_toolsets: Vec::new(),
     }));
 
     // AgentRuntime — central session management and agent caching

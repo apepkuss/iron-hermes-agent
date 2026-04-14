@@ -75,8 +75,17 @@ impl ToolRegistry {
         self.tools.contains_key(name)
     }
 
-    #[allow(dead_code)]
     pub fn toolset_of(&self, name: &str) -> Option<&str> {
         self.tools.get(name).map(|e| e.toolset.as_str())
+    }
+
+    /// Return all unique toolset names with their tool counts.
+    pub fn toolsets(&self) -> Vec<(String, usize)> {
+        let mut counts: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for entry in self.tools.values() {
+            *counts.entry(entry.toolset.clone()).or_insert(0) += 1;
+        }
+        counts.into_iter().collect()
     }
 }

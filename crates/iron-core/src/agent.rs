@@ -414,30 +414,28 @@ impl Agent {
             // h. Inject budget warning into the last tool result if applicable.
             //    This is the hermes-agent pattern: inject into tool result JSON
             //    rather than adding a separate system message, preserving prompt cache.
-            if let Some(warning) = budget.budget_warning() {
-                if let Some(last_tool_msg) = self
+            if let Some(warning) = budget.budget_warning()
+                && let Some(last_tool_msg) = self
                     .session
                     .messages
                     .iter_mut()
                     .rev()
                     .find(|m| m.role == "tool")
-                {
-                    if let Some(ref content) = last_tool_msg.content {
-                        // Try to inject as a JSON field
-                        if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(content) {
-                            if let Some(obj) = parsed.as_object_mut() {
-                                obj.insert(
-                                    "_budget_warning".to_string(),
-                                    serde_json::Value::String(warning),
-                                );
-                                last_tool_msg.content =
-                                    Some(serde_json::to_string(&parsed).unwrap_or_default());
-                            }
-                        } else {
-                            // Not JSON — append as text
-                            last_tool_msg.content = Some(format!("{content}\n\n{warning}"));
-                        }
+                && let Some(ref content) = last_tool_msg.content
+            {
+                // Try to inject as a JSON field
+                if let Ok(mut parsed) = serde_json::from_str::<serde_json::Value>(content) {
+                    if let Some(obj) = parsed.as_object_mut() {
+                        obj.insert(
+                            "_budget_warning".to_string(),
+                            serde_json::Value::String(warning),
+                        );
+                        last_tool_msg.content =
+                            Some(serde_json::to_string(&parsed).unwrap_or_default());
                     }
+                } else {
+                    // Not JSON — append as text
+                    last_tool_msg.content = Some(format!("{content}\n\n{warning}"));
                 }
             }
 

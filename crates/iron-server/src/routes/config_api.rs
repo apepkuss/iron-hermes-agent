@@ -17,7 +17,28 @@ pub async fn get_config(State(state): State<Arc<AppState>>) -> Json<Value> {
         "auxiliary_model": rc.auxiliary_model,
         "compression_threshold": rc.compression_threshold,
         "context_length_override": rc.context_length_override,
+        "disabled_toolsets": rc.disabled_toolsets,
     }))
+}
+
+/// GET `/api/toolsets` — list all registered toolsets with tool counts.
+pub async fn list_toolsets(State(state): State<Arc<AppState>>) -> Json<Value> {
+    let toolsets = state.tool_registry.toolsets();
+    let rc = state.runtime_config.read().await;
+    let disabled: &[String] = &rc.disabled_toolsets;
+
+    let list: Vec<Value> = toolsets
+        .iter()
+        .map(|(name, count)| {
+            json!({
+                "name": name,
+                "tool_count": count,
+                "enabled": !disabled.contains(name),
+            })
+        })
+        .collect();
+
+    Json(json!({ "toolsets": list }))
 }
 
 /// POST `/api/config` — partially update the runtime configuration.
@@ -53,12 +74,20 @@ pub async fn update_config(
         rc.context_length_override = payload["context_length_override"].as_u64();
     }
 
+    if let Some(arr) = payload.get("disabled_toolsets").and_then(|v| v.as_array()) {
+        rc.disabled_toolsets = arr
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect();
+    }
+
     let updated = json!({
         "llm_base_url": rc.llm_base_url,
         "llm_model": rc.llm_model,
         "auxiliary_model": rc.auxiliary_model,
         "compression_threshold": rc.compression_threshold,
         "context_length_override": rc.context_length_override,
+        "disabled_toolsets": rc.disabled_toolsets,
     });
 
     (StatusCode::OK, Json(updated)).into_response()
