@@ -6,7 +6,7 @@ use tracing::{debug, error, warn};
 use crate::budget::IterationBudget;
 use crate::context_compressor::{CompressorConfig, ContextCompressor};
 use crate::error::CoreError;
-use crate::event::{AgentEvent, EventCallback, TodoItem, build_args_preview, truncate_preview};
+use crate::event::{AgentEvent, EventCallback, build_args_preview, truncate_preview};
 use crate::llm::client::LlmClient;
 use crate::llm::types::Message;
 use crate::prompt::{PromptBuilder, PromptContext};
@@ -14,7 +14,6 @@ use crate::session::types::TokenUsage;
 
 use iron_memory::manager::MemoryManager;
 use iron_skills::manager::SkillManager;
-use iron_tool_api::ToolResult;
 use iron_tools::registry::ToolRegistry;
 use iron_tools::types::ToolContext;
 use tokio::sync::Mutex;
@@ -97,8 +96,6 @@ pub struct Agent {
     skill_manager: Arc<SkillManager>,
     config: AgentConfig,
     context_compressor: Option<ContextCompressor>,
-    todos: Vec<TodoItem>,
-    tools_called_since_last_todo: Vec<String>,
     session: SessionState,
 }
 
@@ -122,8 +119,6 @@ impl Agent {
             skill_manager,
             config,
             context_compressor,
-            todos: Vec::new(),
-            tools_called_since_last_todo: Vec::new(),
             session: SessionState::new(String::new()),
         }
     }
@@ -224,40 +219,7 @@ impl Agent {
                 working_dir: std::env::current_dir().unwrap_or_default(),
                 enabled_tools: tool_names.clone(),
             };
-            let mut schemas = self.tool_registry.get_schemas(&tool_ctx);
-            // Inject todo tool schema (handled by Agent, not in ToolRegistry)
-            schemas.push(serde_json::json!({
-                "type": "function",
-                "function": {
-                    "name": "todo",
-                    "description": "Manage a task list to track progress on multi-step work. Use when working on complex tasks with 3+ steps. IMPORTANT: You must actually call the corresponding tools and get real results BEFORE marking any task as completed. Never mark a task completed without having executed the tool and received its output. Only create tasks that the user explicitly requested — do not add extra tasks.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "action": {
-                                "type": "string",
-                                "enum": ["set", "update"],
-                                "description": "'set' replaces the entire list. 'update' changes one item's status."
-                            },
-                            "todos": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "content": {"type": "string"},
-                                        "status": {"type": "string", "enum": ["pending", "in_progress", "completed"]}
-                                    },
-                                    "required": ["content", "status"]
-                                },
-                                "description": "Full todo list. Required for 'set'."
-                            },
-                            "index": {"type": "integer", "description": "0-based index. Required for 'update'."},
-                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed"], "description": "New status. Required for 'update'."}
-                        },
-                        "required": ["action"]
-                    }
-                }
-            }));
+            let schemas = self.tool_registry.get_schemas(&tool_ctx);
             let tools_param = if schemas.is_empty() {
                 None
             } else {
@@ -336,7 +298,7 @@ impl Agent {
             // f. Validate tool calls.
             let mut has_invalid = false;
             for tc in &calls {
-                if !self.tool_registry.has_tool(&tc.function.name) && tc.function.name != "todo" {
+                if !self.tool_registry.has_tool(&tc.function.name) {
                     warn!("Invalid tool call: {}", tc.function.name);
                     has_invalid = true;
                     self.session.messages.push(Message {
@@ -374,26 +336,7 @@ impl Agent {
                 let args: Value = serde_json::from_str(&tc.function.arguments)
                     .unwrap_or(Value::Object(serde_json::Map::new()));
 
-                // TODO tool interception (handled by Agent, not ToolRegistry)
-                // No ToolStarted/ToolCompleted events — TODO state is shown via
-                // TodoUpdate events in the sidebar, not in the tool progress area.
-                if tc.function.name == "todo" {
-                    let todo_result =
-                        self.handle_todo_call(&tc.function.arguments, &event_callback);
-                    let result_text = serde_json::to_string(&todo_result).unwrap_or_default();
-                    let result_text = truncate_tool_result(&result_text, &tc.function.name, &tc.id);
-                    self.session.messages.push(Message {
-                        role: "tool".to_string(),
-                        content: Some(result_text),
-                        tool_calls: None,
-                        tool_call_id: Some(tc.id.clone()),
-                        name: Some("todo".to_string()),
-                    });
-                    tool_calls_made += 1;
-                    continue;
-                }
-
-                // Emit ToolStarted event (only for business tools, not todo)
+                // Emit ToolStarted event
                 if let Some(ref cb) = event_callback {
                     let preview = build_args_preview(&tc.function.arguments);
                     cb(AgentEvent::ToolStarted {
@@ -459,10 +402,6 @@ impl Agent {
                 });
 
                 tool_calls_made += 1;
-
-                // Track non-todo tool calls for todo completion verification
-                self.tools_called_since_last_todo
-                    .push(tc.function.name.clone());
             }
 
             // h. Post-tool — loop continues.
@@ -702,73 +641,6 @@ impl Agent {
             CoreError::LlmRequest(_) => true, // network / timeout errors
             _ => false,
         }
-    }
-
-    /// Handle the built-in `todo` tool call.
-    ///
-    /// When updating a task to "completed", verifies that at least one
-    /// non-todo tool was called since the task was created or last marked
-    /// in_progress. Rejects fake completions with a guiding error message.
-    fn handle_todo_call(
-        &mut self,
-        args_json: &str,
-        event_callback: &Option<EventCallback>,
-    ) -> ToolResult {
-        let args: Value = serde_json::from_str(args_json).unwrap_or_default();
-        let action = args["action"].as_str().unwrap_or("set");
-
-        match action {
-            "set" => {
-                if let Some(items) = args["todos"].as_array() {
-                    self.todos = items
-                        .iter()
-                        .filter_map(|v| {
-                            Some(TodoItem {
-                                content: v["content"].as_str()?.to_string(),
-                                status: v["status"].as_str()?.to_string(),
-                            })
-                        })
-                        .collect();
-                }
-                // Reset tool call tracker when a new todo list is created
-                self.tools_called_since_last_todo.clear();
-            }
-            "update" => {
-                if let (Some(idx), Some(status)) = (args["index"].as_u64(), args["status"].as_str())
-                {
-                    if status == "completed" && self.tools_called_since_last_todo.is_empty() {
-                        // Reject: no tool was called since last todo operation
-                        return ToolResult::err(
-                            "Cannot mark task as completed: you must first call the \
-                             corresponding tool (e.g. execute_code, skills_list, memory) \
-                             and get its result before marking a task completed. \
-                             Please execute the tool now.",
-                        );
-                    }
-
-                    if let Some(item) = self.todos.get_mut(idx as usize) {
-                        item.status = status.to_string();
-                    }
-
-                    // Reset tracker after each todo update
-                    self.tools_called_since_last_todo.clear();
-                }
-            }
-            other => {
-                return ToolResult::err(&format!("unknown todo action: {other}"));
-            }
-        }
-
-        if let Some(cb) = event_callback {
-            cb(AgentEvent::TodoUpdate {
-                todos: self.todos.clone(),
-            });
-        }
-
-        ToolResult::ok(serde_json::json!({
-            "success": true,
-            "count": self.todos.len(),
-        }))
     }
 }
 
