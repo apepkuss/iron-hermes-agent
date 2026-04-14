@@ -129,6 +129,11 @@ impl Agent {
         }
     }
 
+    /// Return a shared reference to the agent config.
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
     /// Return a shared reference to the internal session.
     pub fn session(&self) -> &SessionState {
         &self.session

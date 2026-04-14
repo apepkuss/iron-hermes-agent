@@ -50,6 +50,8 @@ pub struct SessionEntry {
     pub input_tokens: u64,
     pub output_tokens: u64,
     pub message_count: u32,
+    /// Last model used in this session (for detecting model switches).
+    pub last_model: Option<String>,
     /// Turns since last background review (memory/skill). Resets after review.
     pub turns_since_review: u32,
 }
@@ -192,6 +194,7 @@ impl AgentRuntime {
             input_tokens: 0,
             output_tokens: 0,
             message_count: 0,
+            last_model: None,
             turns_since_review: 0,
         };
 
@@ -296,6 +299,33 @@ impl AgentRuntime {
 
         // Load the session id into the agent.
         agent.set_session_id(session_entry.session_id.clone());
+
+        // 2b. Detect model switch and inject note into user message.
+        let current_model = agent.config().model_name.clone();
+        let user_message = {
+            let mut sessions = self.sessions.write().await;
+            if let Some(entry) = sessions.get_mut(key) {
+                if let Some(ref prev_model) = entry.last_model {
+                    if *prev_model != current_model {
+                        let note = format!(
+                            "[Note: model was just switched from {} to {}. \
+                             Adjust your self-identification accordingly.]\n\n",
+                            prev_model, current_model
+                        );
+                        debug!("Model switch detected: {} -> {}", prev_model, current_model);
+                        entry.last_model = Some(current_model.clone());
+                        format!("{note}{user_message}")
+                    } else {
+                        user_message
+                    }
+                } else {
+                    entry.last_model = Some(current_model.clone());
+                    user_message
+                }
+            } else {
+                user_message
+            }
+        };
 
         // 3a. If conversation history was provided, load it into the agent.
         //     This supports the OpenAI-compatible pattern where the client
