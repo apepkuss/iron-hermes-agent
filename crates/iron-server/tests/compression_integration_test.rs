@@ -38,6 +38,7 @@ fn test_runtime_config_defaults() {
         agent_timeout_secs: 600,
         inactivity_timeout_secs: 300,
         session_idle_timeout_secs: 1800,
+        disabled_toolsets: Vec::new(),
     };
 
     assert_eq!(rc.compression_threshold, 0.65);
@@ -61,6 +62,7 @@ fn test_runtime_config_serialization() {
         agent_timeout_secs: 600,
         inactivity_timeout_secs: 300,
         session_idle_timeout_secs: 1800,
+        disabled_toolsets: Vec::new(),
     };
 
     let json = serde_json::to_value(&rc).unwrap();
@@ -83,6 +85,7 @@ fn test_runtime_config_serialization_optional_nulls() {
         agent_timeout_secs: 600,
         inactivity_timeout_secs: 300,
         session_idle_timeout_secs: 1800,
+        disabled_toolsets: Vec::new(),
     };
 
     let json = serde_json::to_value(&rc).unwrap();
@@ -324,6 +327,7 @@ fn test_runtime_config_threshold_range() {
             agent_timeout_secs: 600,
             inactivity_timeout_secs: 300,
             session_idle_timeout_secs: 1800,
+            disabled_toolsets: Vec::new(),
         };
         let json = serde_json::to_value(&rc).unwrap();
         let roundtripped: RuntimeConfig = serde_json::from_value(json).unwrap();

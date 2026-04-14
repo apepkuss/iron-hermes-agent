@@ -5,7 +5,7 @@ use axum::routing::{get, post};
 use tokio::net::TcpListener;
 use tracing::info;
 
-use iron_server::config::ServerConfig;
+use iron_server::config::IronConfig;
 use iron_server::routes::chat::chat_completions;
 use iron_server::routes::config_api::{get_config, list_toolsets, update_config};
 use iron_server::routes::health::health;
@@ -24,9 +24,9 @@ async fn main() {
         )
         .init();
 
-    let config = ServerConfig::from_env();
-    let addr = format!("{}:{}", config.host, config.port);
-    let port = config.port;
+    let config = IronConfig::load();
+    let addr = format!("{}:{}", config.server.host, config.server.port);
+    let port = config.server.port;
     let state = Arc::new(build_app_state(config));
 
     let app = Router::new()

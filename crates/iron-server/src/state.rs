@@ -12,7 +12,7 @@ use iron_skills::tool_module::SkillTools;
 use iron_tool_api::{ToolModule, ToolRegistry};
 use iron_tools::{file_module::FileTools, terminal_module::TerminalTools, web_module::WebTools};
 
-use crate::config::{RuntimeConfig, ServerConfig};
+use crate::config::{IronConfig, RuntimeConfig, ServerConfig};
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -23,7 +23,7 @@ pub struct AppState {
     pub skill_manager: Arc<SkillManager>,
 }
 
-pub fn build_app_state(config: ServerConfig) -> AppState {
+pub fn build_app_state(config: IronConfig) -> AppState {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
     let base = home.join(".iron-hermes");
 
@@ -73,32 +73,22 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
         .set(Arc::clone(&tool_registry))
         .unwrap_or_else(|_| panic!("registry_holder already set"));
 
-    // Runtime config — initialized from ServerConfig, mutable via /api/config
-    let runtime_config = Arc::new(RwLock::new(RuntimeConfig {
-        llm_base_url: config.llm_base_url.clone(),
-        llm_model: config.llm_model.clone(),
-        auxiliary_model: config.auxiliary_model.clone(),
-        compression_threshold: config.compression_threshold,
-        context_length_override: config.context_length_override,
-        fallback_model: config.fallback_model.clone(),
-        agent_timeout_secs: config.agent_timeout_secs,
-        inactivity_timeout_secs: 300,
-        session_idle_timeout_secs: 1800,
-        disabled_toolsets: Vec::new(),
-    }));
+    // Derive sub-configs from IronConfig
+    let server_config = ServerConfig::from(&config);
+    let runtime_config = Arc::new(RwLock::new(RuntimeConfig::from_iron_config(&config)));
 
-    // AgentRuntime — central session management and agent caching
     let core_runtime_config = CoreRuntimeConfig {
-        agent_timeout_secs: config.agent_timeout_secs,
-        inactivity_timeout_secs: 300,
-        session_idle_timeout_secs: 1800,
-        fallback_model: config.fallback_model.clone(),
-        llm_base_url: config.llm_base_url.clone(),
-        llm_api_key: config.llm_api_key.clone(),
-        llm_model: config.llm_model.clone(),
-        review_interval: 10,
+        agent_timeout_secs: config.agent.timeout,
+        inactivity_timeout_secs: config.agent.inactivity_timeout,
+        session_idle_timeout_secs: config.session.idle_timeout,
+        fallback_model: config.fallback.model.clone(),
+        llm_base_url: config.base_url.clone(),
+        llm_api_key: config.api_key.clone(),
+        llm_model: config.model.clone(),
+        review_interval: config.agent.review_interval,
     };
 
+    // AgentRuntime — central session management and agent caching
     let runtime = Arc::new(AgentRuntime::new(
         core_runtime_config,
         Arc::clone(&tool_registry),
@@ -107,7 +97,7 @@ pub fn build_app_state(config: ServerConfig) -> AppState {
     ));
 
     AppState {
-        config,
+        config: server_config,
         runtime,
         runtime_config,
         tool_registry,
