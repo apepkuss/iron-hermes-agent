@@ -16,6 +16,7 @@ fn ctx(session_id: &str) -> ToolContext {
         task_id: session_id.to_string(),
         working_dir: std::env::current_dir().unwrap(),
         enabled_tools: enabled,
+        env_vars: std::collections::HashMap::new(),
     }
 }
 

@@ -10,6 +10,7 @@ use crate::event::{AgentEvent, EventCallback, build_args_preview, truncate_previ
 use crate::llm::client::LlmClient;
 use crate::llm::types::Message;
 use crate::prompt::{PromptBuilder, PromptContext};
+use crate::session::SessionEnvironment;
 use crate::session::types::TokenUsage;
 use crate::todo::{TodoEventReceiver, TodoState};
 
@@ -106,10 +107,13 @@ pub struct Agent {
     session: SessionState,
     todo_event_rx: Option<TodoEventReceiver>,
     todo_state: Option<TodoState>,
+    /// Per-session terminal environment (working dir + safe env vars).
+    environment: SessionEnvironment,
 }
 
 impl Agent {
     /// Create a new `Agent`.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         llm_client: LlmClient,
         tool_registry: Arc<ToolRegistry>,
@@ -118,6 +122,7 @@ impl Agent {
         config: AgentConfig,
         todo_event_rx: Option<TodoEventReceiver>,
         todo_state: Option<TodoState>,
+        environment: SessionEnvironment,
     ) -> Self {
         let context_compressor = config
             .compressor_config
@@ -133,6 +138,7 @@ impl Agent {
             session: SessionState::new(String::new()),
             todo_event_rx,
             todo_state,
+            environment,
         }
     }
 
@@ -239,8 +245,9 @@ impl Agent {
             let tool_names = self.filtered_tool_names();
             let tool_ctx = ToolContext {
                 task_id: self.session.session_id.clone(),
-                working_dir: std::env::current_dir().unwrap_or_default(),
+                working_dir: self.environment.working_dir.clone(),
                 enabled_tools: tool_names.clone(),
+                env_vars: self.environment.env_vars.clone(),
             };
             let schemas = self.tool_registry.get_schemas(&tool_ctx);
             let tools_param = if schemas.is_empty() {

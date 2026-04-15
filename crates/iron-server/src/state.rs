@@ -96,6 +96,7 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         llm_api_key: config.api_key.clone(),
         llm_model: config.model.clone(),
         review_interval: config.agent.review_interval,
+        default_working_dir: config.session.default_working_dir.clone(),
     };
 
     // AgentRuntime — central session management and agent caching

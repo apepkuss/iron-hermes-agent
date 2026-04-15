@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolSchema {
@@ -14,6 +14,9 @@ pub struct ToolContext {
     pub task_id: String,
     pub working_dir: std::path::PathBuf,
     pub enabled_tools: HashSet<String>,
+    /// Safe environment variables for the current session.
+    /// Terminal tools should use these instead of inheriting process env.
+    pub env_vars: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

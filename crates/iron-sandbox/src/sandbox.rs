@@ -1,6 +1,7 @@
 use crate::bridge::{SANDBOX_TOOL_WHITELIST, generate_python_bridge, generate_shell_bridge};
 use crate::error::SandboxError;
 use crate::rpc::RpcServer;
+use iron_tool_api::env::collect_safe_env;
 use iron_tools::registry::ToolRegistry;
 use regex::Regex;
 use std::collections::HashSet;
@@ -49,45 +50,6 @@ pub struct Sandbox {
     config: SandboxConfig,
     registry: Arc<ToolRegistry>,
     allowed_tools: HashSet<String>,
-}
-
-/// Env var prefixes considered safe to pass into sandbox.
-const SAFE_PREFIXES: &[&str] = &[
-    "PATH", "HOME", "USER", "LANG", "LC_", "TERM", "TMPDIR", "TZ", "SHELL",
-];
-
-/// Substrings that indicate a secret env var — block these.
-const SECRET_PATTERNS: &[&str] = &[
-    "KEY",
-    "TOKEN",
-    "SECRET",
-    "PASSWORD",
-    "CREDENTIAL",
-    "PASSWD",
-    "AUTH",
-];
-
-fn is_safe_env_var(name: &str) -> bool {
-    let upper = name.to_uppercase();
-    // If it contains a secret pattern, block it.
-    for pat in SECRET_PATTERNS {
-        if upper.contains(pat) {
-            return false;
-        }
-    }
-    // Allow if it starts with a safe prefix.
-    for prefix in SAFE_PREFIXES {
-        if upper.starts_with(prefix) {
-            return true;
-        }
-    }
-    false
-}
-
-fn collect_safe_env() -> Vec<(String, String)> {
-    std::env::vars()
-        .filter(|(name, _)| is_safe_env_var(name))
-        .collect()
 }
 
 /// Redact common secret patterns from output strings.

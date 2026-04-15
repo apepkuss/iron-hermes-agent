@@ -51,6 +51,7 @@ fn make_ctx(registry: &ToolRegistry) -> ToolContext {
         task_id: "integration-test".to_string(),
         working_dir: std::path::PathBuf::from("."),
         enabled_tools: registry.tool_names(),
+        env_vars: std::collections::HashMap::new(),
     }
 }
 

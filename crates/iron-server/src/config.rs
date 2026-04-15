@@ -116,6 +116,10 @@ pub struct AgentSection {
 pub struct SessionSection {
     #[serde(default = "defaults::session_idle_timeout")]
     pub idle_timeout: u64,
+    /// Default working directory for new sessions.
+    /// Supports `~` expansion. If not set, uses the process CWD.
+    #[serde(default)]
+    pub default_working_dir: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -185,6 +189,7 @@ impl Default for SessionSection {
     fn default() -> Self {
         Self {
             idle_timeout: defaults::session_idle_timeout(),
+            default_working_dir: None,
         }
     }
 }
@@ -338,7 +343,11 @@ impl From<&IronConfig> for ServerConfig {
             model_name: c.server.model_name.clone(),
             auth_token: c.server.auth_token.clone(),
             llm_base_url: c.base_url.clone(),
-            llm_api_key: c.api_key.as_deref().filter(|s| !s.is_empty()).map(String::from),
+            llm_api_key: c
+                .api_key
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(String::from),
             llm_model: c.model.clone(),
             auxiliary_model: c.compression.summary_model.clone(),
             compression_threshold: c.compression.threshold,
@@ -377,7 +386,11 @@ impl RuntimeConfig {
     pub fn from_iron_config(c: &IronConfig) -> Self {
         Self {
             llm_base_url: c.base_url.clone(),
-            llm_api_key: c.api_key.as_deref().filter(|s| !s.is_empty()).map(String::from),
+            llm_api_key: c
+                .api_key
+                .as_deref()
+                .filter(|s| !s.is_empty())
+                .map(String::from),
             llm_model: c.model.clone(),
             auxiliary_model: c.compression.summary_model.clone(),
             compression_threshold: c.compression.threshold,

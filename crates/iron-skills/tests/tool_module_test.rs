@@ -26,6 +26,7 @@ fn make_ctx() -> ToolContext {
             .iter()
             .map(|s| s.to_string())
             .collect(),
+        env_vars: std::collections::HashMap::new(),
     }
 }
 

@@ -1,6 +1,7 @@
 //! Terminal tool — executes shell commands with timeout and output truncation.
 
 use crate::error::ToolError;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
@@ -15,6 +16,10 @@ pub struct TerminalParams {
     pub background: bool,
     pub timeout: Option<u64>,
     pub workdir: Option<PathBuf>,
+    /// Session-level safe environment variables.
+    /// When `Some`, `cmd.env_clear()` + `cmd.envs()` is applied to prevent
+    /// sensitive information from leaking into subprocesses.
+    pub env_vars: Option<HashMap<String, String>>,
 }
 
 /// Result of a terminal command execution.
@@ -53,6 +58,13 @@ impl TerminalTool {
 
         if let Some(dir) = &params.workdir {
             cmd.current_dir(dir);
+        }
+
+        // Environment isolation: use session-level safe env vars to prevent
+        // sensitive information (API keys, tokens, etc.) from leaking.
+        if let Some(ref env_vars) = params.env_vars {
+            cmd.env_clear();
+            cmd.envs(env_vars);
         }
 
         // Process group isolation so we can kill the whole group on timeout.

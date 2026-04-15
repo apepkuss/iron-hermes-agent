@@ -21,6 +21,7 @@ fn make_ctx() -> ToolContext {
         task_id: "test".to_string(),
         working_dir: std::env::temp_dir(),
         enabled_tools: HashSet::from(["execute_code".to_string()]),
+        env_vars: std::collections::HashMap::new(),
     }
 }
 

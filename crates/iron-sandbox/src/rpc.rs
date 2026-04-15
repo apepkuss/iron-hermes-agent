@@ -106,6 +106,7 @@ impl RpcServer {
             task_id: "sandbox".to_string(),
             working_dir: std::env::temp_dir(),
             enabled_tools: self.allowed_tools.clone(),
+            env_vars: iron_tool_api::env::collect_safe_env(),
         };
 
         match self.registry.dispatch_sync(&tool, args, &ctx) {

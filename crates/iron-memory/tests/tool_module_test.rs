@@ -11,6 +11,7 @@ fn make_ctx() -> ToolContext {
         task_id: "test".to_string(),
         working_dir: std::path::PathBuf::from("."),
         enabled_tools: ["memory"].iter().map(|s| s.to_string()).collect(),
+        env_vars: std::collections::HashMap::new(),
     }
 }
 

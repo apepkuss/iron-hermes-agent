@@ -37,6 +37,8 @@ agent:
 session:
   # 空闲超时（秒），超过后 session 过期，下次访问创建新 session
   idle_timeout: 1800
+  # Session 终端命令的默认工作目录（支持 ~ 展开，不配置则使用进程 CWD）
+  # default_working_dir: "~"
 
 # ── 上下文压缩 ──────────────────────────────────────────────
 compression:

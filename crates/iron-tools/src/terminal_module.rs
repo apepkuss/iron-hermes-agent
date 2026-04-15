@@ -48,7 +48,7 @@ impl ToolModule for TerminalTools {
 
         let tool = Arc::new(TerminalTool::new(self.default_timeout));
 
-        registry.register_sync("terminal", "terminal", schema, move |args: Value, _ctx| {
+        registry.register_sync("terminal", "terminal", schema, move |args: Value, ctx| {
             let command = args["command"]
                 .as_str()
                 .ok_or_else(|| ToolError::InvalidArgs {
@@ -59,13 +59,18 @@ impl ToolModule for TerminalTools {
 
             let timeout = args["timeout"].as_u64();
 
-            let workdir = args["workdir"].as_str().map(std::path::PathBuf::from);
+            // Working directory: explicit arg > session default from ToolContext
+            let workdir = args["workdir"]
+                .as_str()
+                .map(std::path::PathBuf::from)
+                .or_else(|| Some(ctx.working_dir.clone()));
 
             let params = TerminalParams {
                 command,
                 background: false,
                 timeout,
                 workdir,
+                env_vars: Some(ctx.env_vars.clone()),
             };
 
             let tool = Arc::clone(&tool);

@@ -1,5 +1,6 @@
 //! iron-tool-api — Tool system public API: types, errors, registry, and ToolModule trait.
 
+pub mod env;
 pub mod error;
 pub mod module_trait;
 pub mod registry;

@@ -229,3 +229,99 @@ async fn test_review_interval_zero_disables() {
     // interval=0 means disabled — no review should ever trigger
     assert_eq!(config.review_interval, 0);
 }
+
+// ─── Session environment isolation tests ───
+
+#[tokio::test]
+async fn test_session_environment_initialized_with_working_dir() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let rt = make_test_runtime(&tmp);
+    let source = webui_source();
+
+    let entry = rt.get_or_create_session(&source).await;
+    // Default config has no default_working_dir, so it should use process CWD.
+    let process_cwd = std::env::current_dir().unwrap();
+    assert_eq!(entry.environment.working_dir, process_cwd);
+}
+
+#[tokio::test]
+async fn test_session_environment_has_safe_env_vars() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let rt = make_test_runtime(&tmp);
+    let source = webui_source();
+
+    let entry = rt.get_or_create_session(&source).await;
+    // PATH should be present (it's in the safe list).
+    assert!(
+        entry.environment.env_vars.contains_key("PATH"),
+        "env_vars should contain PATH"
+    );
+}
+
+#[tokio::test]
+async fn test_session_environment_blocks_secrets() {
+    // Inject a fake secret into the process environment.
+    // SAFETY: test runs single-threaded for this env var; no concurrent readers.
+    unsafe { std::env::set_var("MY_SECRET_TOKEN", "should-not-appear") };
+
+    let tmp = tempfile::TempDir::new().unwrap();
+    let rt = make_test_runtime(&tmp);
+    let source = webui_source();
+
+    let entry = rt.get_or_create_session(&source).await;
+    assert!(
+        !entry.environment.env_vars.contains_key("MY_SECRET_TOKEN"),
+        "env_vars should NOT contain secret vars"
+    );
+
+    // SAFETY: test cleanup; no concurrent readers.
+    unsafe { std::env::remove_var("MY_SECRET_TOKEN") };
+}
+
+#[tokio::test]
+async fn test_session_environment_with_custom_default_working_dir() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let tool_registry = Arc::new(ToolRegistry::new());
+    let memory_manager = Arc::new(Mutex::new(MemoryManager::new(tmp.path(), None, None)));
+    let skill_manager = Arc::new(SkillManager::new(
+        vec![PathBuf::from("/nonexistent")],
+        HashSet::new(),
+    ));
+
+    let config = RuntimeConfig {
+        default_working_dir: Some("/tmp".to_string()),
+        ..RuntimeConfig::default()
+    };
+
+    let rt = AgentRuntime::new(
+        config,
+        tool_registry,
+        memory_manager,
+        skill_manager,
+        iron_core::todo::new_todo_senders(),
+        iron_core::todo::new_todo_state(),
+    );
+
+    let source = webui_source();
+    let entry = rt.get_or_create_session(&source).await;
+    assert_eq!(
+        entry.environment.working_dir,
+        PathBuf::from("/tmp"),
+        "Session should use configured default_working_dir"
+    );
+}
+
+#[tokio::test]
+async fn test_different_sessions_share_same_env_policy() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let rt = make_test_runtime(&tmp);
+
+    let entry1 = rt.get_or_create_session(&webui_source()).await;
+    let entry2 = rt.get_or_create_session(&slack_source()).await;
+
+    // Different sessions should both have safe env vars.
+    assert!(entry1.environment.env_vars.contains_key("PATH"));
+    assert!(entry2.environment.env_vars.contains_key("PATH"));
+    // Same working dir policy (both use process CWD by default).
+    assert_eq!(entry1.environment.working_dir, entry2.environment.working_dir);
+}

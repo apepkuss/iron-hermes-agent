@@ -12,6 +12,7 @@ use crate::error::CoreError;
 use crate::event::EventCallback;
 use crate::llm::client::{LlmClient, LlmConfig};
 use crate::llm::types::Message;
+use crate::session::SessionEnvironment;
 use crate::todo::{TodoSenders, TodoState, create_todo_channel};
 
 use iron_memory::manager::MemoryManager;
@@ -55,6 +56,8 @@ pub struct SessionEntry {
     pub last_model: Option<String>,
     /// Turns since last background review (memory/skill). Resets after review.
     pub turns_since_review: u32,
+    /// Per-session terminal environment (working dir + safe env vars).
+    pub environment: SessionEnvironment,
 }
 
 // ─── RuntimeConfig ───
@@ -77,6 +80,9 @@ pub struct RuntimeConfig {
     pub llm_model: String,
     /// Number of user turns between background reviews (0 = disabled). Default: 10.
     pub review_interval: u32,
+    /// Default working directory for new sessions.
+    /// Supports `~` expansion. If `None`, uses the process CWD.
+    pub default_working_dir: Option<String>,
 }
 
 impl Default for RuntimeConfig {
@@ -90,6 +96,7 @@ impl Default for RuntimeConfig {
             llm_api_key: None,
             llm_model: String::from("gpt-4o"),
             review_interval: 10,
+            default_working_dir: None,
         }
     }
 }
@@ -196,6 +203,19 @@ impl AgentRuntime {
             }
         }
 
+        let default_working_dir = self.config.read().await.default_working_dir.clone();
+        let working_dir = default_working_dir
+            .map(|d| {
+                // Expand ~ to the user's home directory.
+                let expanded = d.replacen(
+                    '~',
+                    &dirs::home_dir().unwrap_or_default().to_string_lossy(),
+                    1,
+                );
+                std::path::PathBuf::from(expanded)
+            })
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
         let now = Instant::now();
         let entry = SessionEntry {
             session_id: Uuid::new_v4().to_string(),
@@ -208,6 +228,7 @@ impl AgentRuntime {
             message_count: 0,
             last_model: None,
             turns_since_review: 0,
+            environment: SessionEnvironment::new(working_dir),
         };
 
         let mut sessions = self.sessions.write().await;
@@ -306,7 +327,13 @@ impl AgentRuntime {
         // 2. Compute config signature and obtain an agent.
         let signature = compute_config_signature(&agent_config);
         let mut agent = self
-            .get_or_create_agent(key, &signature, agent_config, &session_entry.session_id)
+            .get_or_create_agent(
+                key,
+                &signature,
+                agent_config,
+                &session_entry.session_id,
+                session_entry.environment.clone(),
+            )
             .await;
 
         // Load the session id into the agent.
@@ -419,6 +446,7 @@ impl AgentRuntime {
         signature: &str,
         agent_config: AgentConfig,
         session_id: &str,
+        environment: SessionEnvironment,
     ) -> Agent {
         {
             let mut agents = self.agents.lock().await;
@@ -467,6 +495,7 @@ impl AgentRuntime {
             agent_config,
             Some(todo_rx),
             Some(Arc::clone(&self.todo_state)),
+            environment,
         )
     }
 
@@ -538,6 +567,7 @@ impl AgentRuntime {
                 review_config,
                 None,
                 None,
+                SessionEnvironment::new(std::env::current_dir().unwrap_or_default()),
             );
 
             // Load the conversation history
