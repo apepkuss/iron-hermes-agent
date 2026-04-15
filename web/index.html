@@ -284,6 +284,32 @@ html, body {
   color: #AAAAAA;
 }
 
+.api-key-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.api-key-row .settings-input {
+  flex: 1;
+}
+
+.api-key-copy-btn {
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  color: #999;
+  cursor: pointer;
+  font-size: 22px;
+  padding: 3px 8px;
+  line-height: 1;
+}
+
+.api-key-copy-btn:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
 .settings-select {
   font-family: var(--font);
   font-size: 13px;
@@ -976,6 +1002,20 @@ html, body {
       >
     </div>
 
+    <!-- API Key -->
+    <div class="settings-field">
+      <label class="settings-label" for="apiKeyInput">API Key</label>
+      <div class="api-key-row">
+        <input
+          class="settings-input"
+          id="apiKeyInput"
+          type="password"
+          placeholder=""
+        >
+        <button class="api-key-copy-btn" id="apiKeyCopyBtn" title="Copy">&#x2398;</button>
+      </div>
+    </div>
+
     <!-- Auxiliary Model -->
     <div class="settings-field">
       <label class="settings-label" for="auxModelSelect">Auxiliary Model</label>
@@ -1049,6 +1089,17 @@ html, body {
   const settingsBackdrop = document.getElementById('settingsBackdrop');
   const settingsCloseBtn = document.getElementById('settingsCloseBtn');
   const providerUrlInput = document.getElementById('providerUrl');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const apiKeyCopyBtn = document.getElementById('apiKeyCopyBtn');
+
+  apiKeyCopyBtn.addEventListener('click', function() {
+    var val = apiKeyInput.value;
+    if (!val) return;
+    navigator.clipboard.writeText(val).then(function() {
+      apiKeyCopyBtn.textContent = '\u2713';
+      setTimeout(function() { apiKeyCopyBtn.innerHTML = '&#x2398;'; }, 1500);
+    });
+  });
   const auxModelSelect = document.getElementById('auxModelSelect');
   const compressionSlider = document.getElementById('compressionSlider');
   const sliderValueDisplay = document.getElementById('sliderValueDisplay');
@@ -1124,8 +1175,15 @@ html, body {
       const resp = await fetch('/api/config');
       if (!resp.ok) return;
       const cfg = await resp.json();
-      if (cfg.provider_url) {
-        providerUrlInput.value = cfg.provider_url;
+      if (cfg.llm_base_url) {
+        providerUrlInput.value = cfg.llm_base_url;
+      }
+      // Show whether API key is configured (never expose the actual value)
+      apiKeyInput.value = '';
+      if (cfg.llm_api_key_set) {
+        apiKeyInput.placeholder = '••••••••';
+      } else {
+        apiKeyInput.placeholder = '';
       }
       if (cfg.compression_threshold !== undefined && cfg.compression_threshold !== null) {
         compressionSlider.value = Math.round(cfg.compression_threshold * 100);
@@ -1247,12 +1305,17 @@ html, body {
     });
 
     const payload = {
-      provider_url: providerUrlInput.value.trim() || null,
+      llm_base_url: providerUrlInput.value.trim() || null,
       aux_model: auxModelSelect.value || null,
       compression_threshold: parseFloat(compressionSlider.value) / 100,
       context_length: contextLengthInput.value ? parseInt(contextLengthInput.value, 10) : null,
       disabled_toolsets: disabledToolsets
     };
+    // Only send API key if user entered a new value
+    var apiKeyVal = apiKeyInput.value.trim();
+    if (apiKeyVal) {
+      payload.llm_api_key = apiKeyVal;
+    }
 
     try {
       const resp = await fetch('/api/config', {

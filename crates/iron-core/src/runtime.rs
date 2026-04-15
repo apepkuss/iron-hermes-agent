@@ -180,6 +180,11 @@ impl AgentRuntime {
         }
     }
 
+    /// Update the LLM API key at runtime.
+    pub async fn set_api_key(&self, api_key: Option<String>) {
+        self.config.write().await.llm_api_key = api_key;
+    }
+
     /// Return an existing session or create a new one.
     pub async fn get_or_create_session(&self, source: &SessionSource) -> SessionEntry {
         let key = build_session_key(source);

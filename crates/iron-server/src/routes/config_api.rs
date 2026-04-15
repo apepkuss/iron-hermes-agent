@@ -11,8 +11,11 @@ use crate::state::AppState;
 /// GET `/api/config` — return the current runtime configuration.
 pub async fn get_config(State(state): State<Arc<AppState>>) -> Json<Value> {
     let rc = state.runtime_config.read().await;
+    // Mask API key: return whether it's set, not the value itself.
+    let has_api_key = rc.llm_api_key.is_some();
     Json(json!({
         "llm_base_url": rc.llm_base_url,
+        "llm_api_key_set": has_api_key,
         "llm_model": rc.llm_model,
         "auxiliary_model": rc.auxiliary_model,
         "compression_threshold": rc.compression_threshold,
@@ -55,6 +58,16 @@ pub async fn update_config(
         rc.llm_base_url = v.to_string();
     }
 
+    if payload.get("llm_api_key").is_some() {
+        let new_key = payload["llm_api_key"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        rc.llm_api_key = new_key.clone();
+        // Sync to AgentRuntime's CoreRuntimeConfig so new agents pick it up.
+        state.runtime.set_api_key(new_key).await;
+    }
+
     if let Some(v) = payload.get("llm_model").and_then(|v| v.as_str()) {
         rc.llm_model = v.to_string();
     }
@@ -83,6 +96,7 @@ pub async fn update_config(
 
     let updated = json!({
         "llm_base_url": rc.llm_base_url,
+        "llm_api_key_set": rc.llm_api_key.is_some(),
         "llm_model": rc.llm_model,
         "auxiliary_model": rc.auxiliary_model,
         "compression_threshold": rc.compression_threshold,

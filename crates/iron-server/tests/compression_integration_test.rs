@@ -30,6 +30,7 @@ fn make_tool_result_msg(content: &str, call_id: &str, fn_name: &str) -> Message 
 fn test_runtime_config_defaults() {
     let rc = RuntimeConfig {
         llm_base_url: "http://localhost:9068/v1".to_string(),
+        llm_api_key: None,
         llm_model: "test-model".to_string(),
         auxiliary_model: None,
         compression_threshold: 0.65,
@@ -54,6 +55,7 @@ fn test_runtime_config_defaults() {
 fn test_runtime_config_serialization() {
     let rc = RuntimeConfig {
         llm_base_url: "http://localhost:9068/v1".to_string(),
+        llm_api_key: None,
         llm_model: "Qwen3-8B".to_string(),
         auxiliary_model: Some("Qwen3-4B".to_string()),
         compression_threshold: 0.65,
@@ -77,6 +79,7 @@ fn test_runtime_config_serialization() {
 fn test_runtime_config_serialization_optional_nulls() {
     let rc = RuntimeConfig {
         llm_base_url: "http://localhost:9068/v1".to_string(),
+        llm_api_key: None,
         llm_model: "test-model".to_string(),
         auxiliary_model: None,
         compression_threshold: 0.80,
@@ -319,6 +322,7 @@ fn test_runtime_config_threshold_range() {
     for &threshold in &[0.50_f64, 0.65, 0.80, 0.95] {
         let rc = RuntimeConfig {
             llm_base_url: "http://localhost:9068/v1".to_string(),
+            llm_api_key: None,
             llm_model: "test".to_string(),
             auxiliary_model: None,
             compression_threshold: threshold,

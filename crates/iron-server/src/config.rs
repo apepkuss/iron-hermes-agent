@@ -338,7 +338,7 @@ impl From<&IronConfig> for ServerConfig {
             model_name: c.server.model_name.clone(),
             auth_token: c.server.auth_token.clone(),
             llm_base_url: c.base_url.clone(),
-            llm_api_key: c.api_key.clone(),
+            llm_api_key: c.api_key.as_deref().filter(|s| !s.is_empty()).map(String::from),
             llm_model: c.model.clone(),
             auxiliary_model: c.compression.summary_model.clone(),
             compression_threshold: c.compression.threshold,
@@ -357,6 +357,7 @@ impl From<&IronConfig> for ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfig {
     pub llm_base_url: String,
+    pub llm_api_key: Option<String>,
     pub llm_model: String,
     pub auxiliary_model: Option<String>,
     pub compression_threshold: f64,
@@ -376,6 +377,7 @@ impl RuntimeConfig {
     pub fn from_iron_config(c: &IronConfig) -> Self {
         Self {
             llm_base_url: c.base_url.clone(),
+            llm_api_key: c.api_key.as_deref().filter(|s| !s.is_empty()).map(String::from),
             llm_model: c.model.clone(),
             auxiliary_model: c.compression.summary_model.clone(),
             compression_threshold: c.compression.threshold,
