@@ -467,34 +467,63 @@ html, body {
   justify-content: center;
   height: 100%;
   gap: 20px;
-  opacity: 0.6;
+  opacity: 0.35;
   user-select: none;
 }
 
 .empty-logo {
-  width: 64px;
-  height: 64px;
+  width: 80px;
+  height: 80px;
   position: relative;
 }
 
+/* Outer ring with four notches at N/S/E/W */
 .empty-logo .geo-circle {
-  width: 64px;
-  height: 64px;
-  border: 2px solid var(--text);
-  border-radius: 50%;
+  width: 80px;
+  height: 80px;
   position: absolute;
   top: 0;
   left: 0;
 }
+.empty-logo .geo-circle::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid var(--text);
+  border-radius: 50%;
+}
+/* Notch overlays — four small bars that cut into the ring */
+.empty-logo .geo-circle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(var(--bg), var(--bg)) no-repeat 50% 0 / 6px 6px,
+    linear-gradient(var(--bg), var(--bg)) no-repeat 50% 100% / 6px 6px,
+    linear-gradient(var(--bg), var(--bg)) no-repeat 0 50% / 6px 6px,
+    linear-gradient(var(--bg), var(--bg)) no-repeat 100% 50% / 6px 6px;
+}
 
+/* Inner rounded square */
 .empty-logo .geo-square {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  border: 3px solid var(--text);
+  border-radius: 6px;
+  position: absolute;
+  top: 23px;
+  left: 23px;
+}
+
+/* Center diamond */
+.empty-logo .geo-diamond {
+  width: 10px;
+  height: 10px;
   border: 2px solid var(--text);
   position: absolute;
-  top: 16px;
-  left: 16px;
-  transform: rotate(45deg);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 .empty-title {
@@ -962,9 +991,10 @@ html, body {
           <div class="empty-logo">
             <div class="geo-circle"></div>
             <div class="geo-square"></div>
+            <div class="geo-diamond"></div>
           </div>
           <div class="empty-title">IRON HERMES</div>
-          <div class="empty-tagline">Intelligent Agent Framework</div>
+          <div class="empty-tagline">Intelligent Agent</div>
         </div>
       </div>
 
