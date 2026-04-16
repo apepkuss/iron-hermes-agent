@@ -6,7 +6,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Built_with-Rust-B7410E?logo=rust" alt="Rust"/>
-  <img src="https://img.shields.io/badge/License-MIT-blue" alt="License"/>
+  <img src="https://img.shields.io/badge/Platform-macOS-000?logo=apple" alt="macOS"/>
+  <img src="https://img.shields.io/badge/Platform-Linux-333?logo=linux&logoColor=white" alt="Linux"/>
+  <img src="https://img.shields.io/badge/License-Apache_2.0-blue" alt="License"/>
 </p>
 
 <p align="center">
@@ -183,4 +185,4 @@ iron-hermes-agent/
 
 ## 许可证
 
-MIT
+Apache-2.0
