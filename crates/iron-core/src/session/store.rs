@@ -10,8 +10,20 @@ pub struct SessionStore {
 }
 
 impl SessionStore {
+    /// Ensure the libsimple FTS5 tokenizer is registered as an auto-extension.
+    /// Must be called once before opening any database connections.
+    fn ensure_simple_tokenizer() {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            libsimple::enable_auto_extension()
+                .expect("Failed to register libsimple FTS5 tokenizer");
+        });
+    }
+
     /// Open (or create) a SQLite database at `db_path`.
     pub fn new(db_path: &str) -> Result<Self, CoreError> {
+        Self::ensure_simple_tokenizer();
         let conn = Connection::open(db_path)
             .map_err(|e| CoreError::Session(format!("Failed to open database: {e}")))?;
         let store = Self { conn };
@@ -21,6 +33,7 @@ impl SessionStore {
 
     /// Create an in-memory SQLite database (primarily for testing).
     pub fn new_in_memory() -> Result<Self, CoreError> {
+        Self::ensure_simple_tokenizer();
         let conn = Connection::open_in_memory()
             .map_err(|e| CoreError::Session(format!("Failed to open in-memory database: {e}")))?;
         let store = Self { conn };
@@ -70,6 +83,34 @@ impl SessionStore {
                 ",
             )
             .map_err(|e| CoreError::Session(format!("Failed to create tables: {e}")))?;
+
+        // FTS5 full-text search index with libsimple tokenizer (jieba Chinese + English).
+        self.conn
+            .execute_batch(
+                "
+                CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
+                    USING fts5(content, session_id UNINDEXED, role UNINDEXED,
+                               content=messages, content_rowid=id, tokenize='simple');
+
+                CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+                    INSERT INTO messages_fts(rowid, content, session_id, role)
+                        VALUES (new.id, new.content, new.session_id, new.role);
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, content, session_id, role)
+                        VALUES('delete', old.id, old.content, old.session_id, old.role);
+                END;
+
+                CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+                    INSERT INTO messages_fts(messages_fts, rowid, content, session_id, role)
+                        VALUES('delete', old.id, old.content, old.session_id, old.role);
+                    INSERT INTO messages_fts(rowid, content, session_id, role)
+                        VALUES (new.id, new.content, new.session_id, new.role);
+                END;
+                ",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to create FTS5 tables: {e}")))?;
 
         Ok(())
     }
@@ -248,6 +289,90 @@ impl SessionStore {
         Ok(())
     }
 
+    /// Search messages using FTS5 full-text search.
+    ///
+    /// Returns matching messages ranked by relevance (BM25), excluding the
+    /// given session.  Uses the `simple_query()` SQL function from libsimple
+    /// to tokenize the query with jieba (Chinese) + default (English).
+    pub fn search_messages(
+        &self,
+        query: &str,
+        exclude_session_id: Option<&str>,
+        role_filter: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<super::types::MessageMatch>, CoreError> {
+        let exclude = exclude_session_id.unwrap_or("");
+
+        let (sql, roles): (String, Vec<String>) = if let Some(filter) = role_filter {
+            let role_list: Vec<String> = filter.split(',').map(|r| r.trim().to_string()).collect();
+            let placeholders: String = role_list
+                .iter()
+                .enumerate()
+                .map(|(i, _)| format!("?{}", i + 3))
+                .collect::<Vec<_>>()
+                .join(",");
+            (
+                format!(
+                    "SELECT m.session_id, m.content, m.role, rank \
+                     FROM messages_fts \
+                     JOIN messages m ON messages_fts.rowid = m.id \
+                     WHERE messages_fts MATCH simple_query(?1) \
+                       AND m.session_id != ?2 \
+                       AND m.role IN ({placeholders}) \
+                     ORDER BY rank \
+                     LIMIT {limit}"
+                ),
+                role_list,
+            )
+        } else {
+            (
+                format!(
+                    "SELECT m.session_id, m.content, m.role, rank \
+                     FROM messages_fts \
+                     JOIN messages m ON messages_fts.rowid = m.id \
+                     WHERE messages_fts MATCH simple_query(?1) \
+                       AND m.session_id != ?2 \
+                     ORDER BY rank \
+                     LIMIT {limit}"
+                ),
+                vec![],
+            )
+        };
+
+        let mut stmt = self
+            .conn
+            .prepare(&sql)
+            .map_err(|e| CoreError::Session(format!("Failed to prepare FTS5 query: {e}")))?;
+
+        let mut idx = 1;
+        stmt.raw_bind_parameter(idx, query)
+            .map_err(|e| CoreError::Session(format!("Failed to bind query: {e}")))?;
+        idx += 1;
+        stmt.raw_bind_parameter(idx, exclude)
+            .map_err(|e| CoreError::Session(format!("Failed to bind exclude: {e}")))?;
+        idx += 1;
+        for role in &roles {
+            stmt.raw_bind_parameter(idx, role.as_str())
+                .map_err(|e| CoreError::Session(format!("Failed to bind role: {e}")))?;
+            idx += 1;
+        }
+
+        let mut results = Vec::new();
+        let mut rows = stmt.raw_query();
+        while let Some(row) = rows
+            .next()
+            .map_err(|e| CoreError::Session(format!("Failed to read FTS5 row: {e}")))?
+        {
+            results.push(super::types::MessageMatch {
+                session_id: row.get(0).unwrap_or_default(),
+                content: row.get(1).unwrap_or_default(),
+                role: row.get(2).unwrap_or_default(),
+                rank: row.get(3).unwrap_or(0.0),
+            });
+        }
+        Ok(results)
+    }
+
     /// Delete a session and all of its messages.
     pub fn delete_session(&self, session_id: &str) -> Result<(), CoreError> {
         self.conn
@@ -303,7 +428,7 @@ fn row_to_message(row: &rusqlite::Row<'_>) -> SqlResult<SessionMessage> {
 }
 
 /// Returns the current UTC time as an ISO 8601 string without external deps.
-fn chrono_now() -> String {
+pub(crate) fn chrono_now() -> String {
     // Use std::time for a simple UTC timestamp.
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()

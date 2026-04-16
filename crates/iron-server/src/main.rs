@@ -12,6 +12,7 @@ use iron_server::routes::health::health;
 use iron_server::routes::models::{list_models, list_provider_models};
 use iron_server::routes::models_status::models_status;
 use iron_server::routes::session::reset_session;
+use iron_server::routes::session_search::search_sessions;
 use iron_server::routes::static_files;
 use iron_server::state::build_app_state;
 
@@ -40,6 +41,7 @@ async fn main() {
         .route("/api/toolsets", get(list_toolsets))
         .route("/api/models/status", get(models_status))
         .route("/api/session/reset", post(reset_session))
+        .route("/api/sessions/search", get(search_sessions))
         .with_state(state);
 
     let listener = TcpListener::bind(&addr).await.unwrap();

@@ -25,6 +25,7 @@ uuid = { workspace = true }
 regex = { workspace = true }
 tokio-util = "0.7"
 dirs = "5"
+libsimple = "0.9"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

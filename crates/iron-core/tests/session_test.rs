@@ -258,3 +258,139 @@ fn test_session_with_parent() {
     assert_eq!(retrieved_parent.id, "parent-001");
     assert!(retrieved_parent.parent_session_id.is_none());
 }
+
+// ─── FTS5 search tests ───
+
+#[test]
+fn test_fts5_search_chinese() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message("s1", "user", "我们讨论了搜索功能的设计"))
+        .unwrap();
+    store
+        .add_message(&make_message(
+            "s1",
+            "assistant",
+            "好的，搜索功能需要使用FTS5",
+        ))
+        .unwrap();
+
+    let results = store.search_messages("搜索", None, None, 10).unwrap();
+    assert!(!results.is_empty(), "Chinese search should return results");
+    assert_eq!(results[0].session_id, "s1");
+}
+
+#[test]
+fn test_fts5_search_english() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message(
+            "s1",
+            "user",
+            "How does the search feature work?",
+        ))
+        .unwrap();
+
+    let results = store.search_messages("search", None, None, 10).unwrap();
+    assert!(!results.is_empty(), "English search should return results");
+}
+
+#[test]
+fn test_fts5_search_excludes_session() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .create_session(&make_session("s2", "qwen", "2026-04-15T01:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message("s1", "user", "Docker deployment config"))
+        .unwrap();
+    store
+        .add_message(&make_message("s2", "user", "Docker container setup"))
+        .unwrap();
+
+    // Exclude s1
+    let results = store
+        .search_messages("Docker", Some("s1"), None, 10)
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].session_id, "s2");
+}
+
+#[test]
+fn test_fts5_search_role_filter() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message("s1", "user", "Tell me about Kubernetes"))
+        .unwrap();
+    store
+        .add_message(&make_message(
+            "s1",
+            "assistant",
+            "Kubernetes is a container orchestration platform",
+        ))
+        .unwrap();
+
+    // Only user messages
+    let results = store
+        .search_messages("Kubernetes", None, Some("user"), 10)
+        .unwrap();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].role, "user");
+}
+
+#[test]
+fn test_fts5_search_no_match() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message("s1", "user", "Hello world"))
+        .unwrap();
+
+    let results = store
+        .search_messages("nonexistent_keyword_xyz", None, None, 10)
+        .unwrap();
+    assert!(results.is_empty());
+}
+
+#[test]
+fn test_fts5_trigger_on_delete() {
+    let store = SessionStore::new_in_memory().expect("store");
+    store
+        .create_session(&make_session("s1", "qwen", "2026-04-15T00:00:00Z"))
+        .unwrap();
+    store
+        .add_message(&make_message("s1", "user", "unique_test_content_12345"))
+        .unwrap();
+
+    // Verify it's searchable
+    let results = store
+        .search_messages("unique_test_content_12345", None, None, 10)
+        .unwrap();
+    assert_eq!(results.len(), 1);
+
+    // Delete the session (cascades to messages)
+    store.delete_session("s1").unwrap();
+
+    // Should no longer be searchable
+    let results = store
+        .search_messages("unique_test_content_12345", None, None, 10)
+        .unwrap();
+    assert!(
+        results.is_empty(),
+        "Deleted messages should not be searchable"
+    );
+}

@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::{Mutex, RwLock};
 
 use iron_core::runtime::{AgentRuntime, RuntimeConfig as CoreRuntimeConfig};
+use iron_core::session::store::SessionStore;
 use iron_core::todo::{new_todo_senders, new_todo_state, register_todo};
 use iron_memory::manager::MemoryManager;
 use iron_memory::tool_module::MemoryTools;
@@ -22,6 +23,8 @@ pub struct AppState {
     pub tool_registry: Arc<ToolRegistry>,
     pub memory_manager: Arc<Mutex<MemoryManager>>,
     pub skill_manager: Arc<SkillManager>,
+    pub session_store: Arc<std::sync::Mutex<SessionStore>>,
+    pub searcher: Arc<iron_core::session::SessionSearcher>,
 }
 
 pub fn build_app_state(config: IronConfig) -> AppState {
@@ -70,6 +73,32 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         Arc::clone(&todo_senders),
     );
 
+    // SessionStore — SQLite-backed session and message persistence
+    let db_path = base.join("state.db");
+    let session_store = SessionStore::new(db_path.to_str().unwrap_or("state.db"))
+        .expect("Failed to create session store");
+    let session_store = Arc::new(std::sync::Mutex::new(session_store));
+
+    // SessionSearcher — build auxiliary client if summary model is configured
+    let auxiliary_client = config
+        .compression
+        .summary_model
+        .as_ref()
+        .filter(|m| !m.is_empty())
+        .map(|model| {
+            iron_core::auxiliary_client::AuxiliaryClient::new(
+                config.base_url.clone(),
+                model.clone(),
+            )
+        });
+    let searcher = Arc::new(iron_core::session::SessionSearcher::new(
+        Arc::clone(&session_store),
+        auxiliary_client,
+    ));
+
+    // Register session_search tool
+    iron_core::session::search_tool::register_session_search(&mut registry, Arc::clone(&searcher));
+
     // Register execute_code using a OnceLock to break the circular dependency:
     // the handler needs Arc<ToolRegistry> for sandbox RPC dispatch, but
     // ToolRegistry must be fully built before it can be wrapped in Arc.
@@ -107,6 +136,7 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         Arc::clone(&skill_manager),
         todo_senders,
         todo_state,
+        Arc::clone(&session_store),
     ));
 
     AppState {
@@ -116,5 +146,7 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         tool_registry,
         memory_manager,
         skill_manager,
+        session_store,
+        searcher,
     }
 }

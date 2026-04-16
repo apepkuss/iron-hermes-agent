@@ -4,4 +4,5 @@ pub mod health;
 pub mod models;
 pub mod models_status;
 pub mod session;
+pub mod session_search;
 pub mod static_files;

@@ -40,6 +40,9 @@ fn make_test_runtime(tmp_dir: &tempfile::TempDir) -> AgentRuntime {
         vec![PathBuf::from("/nonexistent")],
         HashSet::new(),
     ));
+    let session_store =
+        iron_core::session::store::SessionStore::new_in_memory().expect("in-memory session store");
+    let session_store = Arc::new(std::sync::Mutex::new(session_store));
     AgentRuntime::new(
         RuntimeConfig::default(),
         tool_registry,
@@ -47,6 +50,7 @@ fn make_test_runtime(tmp_dir: &tempfile::TempDir) -> AgentRuntime {
         skill_manager,
         iron_core::todo::new_todo_senders(),
         iron_core::todo::new_todo_state(),
+        session_store,
     )
 }
 
@@ -293,6 +297,9 @@ async fn test_session_environment_with_custom_default_working_dir() {
         ..RuntimeConfig::default()
     };
 
+    let session_store =
+        iron_core::session::store::SessionStore::new_in_memory().expect("in-memory session store");
+    let session_store = Arc::new(std::sync::Mutex::new(session_store));
     let rt = AgentRuntime::new(
         config,
         tool_registry,
@@ -300,6 +307,7 @@ async fn test_session_environment_with_custom_default_working_dir() {
         skill_manager,
         iron_core::todo::new_todo_senders(),
         iron_core::todo::new_todo_state(),
+        session_store,
     );
 
     let source = webui_source();
@@ -323,5 +331,8 @@ async fn test_different_sessions_share_same_env_policy() {
     assert!(entry1.environment.env_vars.contains_key("PATH"));
     assert!(entry2.environment.env_vars.contains_key("PATH"));
     // Same working dir policy (both use process CWD by default).
-    assert_eq!(entry1.environment.working_dir, entry2.environment.working_dir);
+    assert_eq!(
+        entry1.environment.working_dir,
+        entry2.environment.working_dir
+    );
 }

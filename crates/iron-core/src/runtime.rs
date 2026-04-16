@@ -13,6 +13,8 @@ use crate::event::EventCallback;
 use crate::llm::client::{LlmClient, LlmConfig};
 use crate::llm::types::Message;
 use crate::session::SessionEnvironment;
+use crate::session::store::SessionStore;
+use crate::session::types::SessionMessage;
 use crate::todo::{TodoSenders, TodoState, create_todo_channel};
 
 use iron_memory::manager::MemoryManager;
@@ -58,6 +60,8 @@ pub struct SessionEntry {
     pub turns_since_review: u32,
     /// Per-session terminal environment (working dir + safe env vars).
     pub environment: SessionEnvironment,
+    /// Number of messages already persisted to SQLite (for deduplication).
+    pub persisted_message_count: usize,
 }
 
 // ─── RuntimeConfig ───
@@ -161,6 +165,8 @@ pub struct AgentRuntime {
     skill_manager: Arc<SkillManager>,
     todo_senders: TodoSenders,
     todo_state: TodoState,
+    /// SQLite-backed session store for message persistence and search.
+    session_store: Arc<std::sync::Mutex<SessionStore>>,
 }
 
 impl AgentRuntime {
@@ -172,6 +178,7 @@ impl AgentRuntime {
         skill_manager: Arc<SkillManager>,
         todo_senders: TodoSenders,
         todo_state: TodoState,
+        session_store: Arc<std::sync::Mutex<SessionStore>>,
     ) -> Self {
         Self {
             config: RwLock::new(config),
@@ -184,7 +191,13 @@ impl AgentRuntime {
             skill_manager,
             todo_senders,
             todo_state,
+            session_store,
         }
+    }
+
+    /// Return a reference to the session store.
+    pub fn session_store(&self) -> &Arc<std::sync::Mutex<SessionStore>> {
+        &self.session_store
     }
 
     /// Update the LLM API key at runtime.
@@ -229,6 +242,7 @@ impl AgentRuntime {
             last_model: None,
             turns_since_review: 0,
             environment: SessionEnvironment::new(working_dir),
+            persisted_message_count: 0,
         };
 
         let mut sessions = self.sessions.write().await;
@@ -321,8 +335,33 @@ impl AgentRuntime {
         event_callback: Option<EventCallback>,
         conversation_history: Vec<crate::llm::types::Message>,
     ) -> Result<AgentResponse, CoreError> {
-        // 1. Ensure session exists.
+        // 1. Ensure session exists (in-memory + SQLite).
         let session_entry = self.get_or_create_session(source).await;
+
+        // 1b. Ensure session record exists in SQLite (for message foreign key).
+        if session_entry.persisted_message_count == 0 {
+            let sid = session_entry.session_id.clone();
+            let model = String::new(); // Will be updated when we know the model.
+            let store = Arc::clone(&self.session_store);
+            if let Ok(store) = store.lock() {
+                let session = crate::session::types::Session {
+                    id: sid,
+                    model,
+                    system_prompt: None,
+                    parent_session_id: None,
+                    started_at: crate::session::store::chrono_now(),
+                    ended_at: None,
+                    end_reason: None,
+                    message_count: 0,
+                    tool_call_count: 0,
+                    title: None,
+                };
+                if let Err(e) = store.create_session(&session) {
+                    // Ignore duplicate — session may already exist from a previous run.
+                    debug!("Session create (may already exist): {e}");
+                }
+            }
+        }
 
         // 2. Compute config signature and obtain an agent.
         let signature = compute_config_signature(&agent_config);
@@ -418,7 +457,44 @@ impl AgentRuntime {
                     }
                 };
 
-                // 5b. Spawn background review if due.
+                // 5b. Persist new messages to SQLite.
+                {
+                    let all_messages = agent.session().messages.clone();
+                    let persisted_count = {
+                        let sessions = self.sessions.read().await;
+                        sessions
+                            .get(key)
+                            .map(|e| e.persisted_message_count)
+                            .unwrap_or(0)
+                    };
+                    let new_messages: Vec<Message> =
+                        all_messages.into_iter().skip(persisted_count).collect();
+                    let new_count = new_messages.len();
+
+                    if !new_messages.is_empty() {
+                        let sid = session_entry.session_id.clone();
+                        let store = Arc::clone(&self.session_store);
+                        // Run SQLite writes on a blocking thread.
+                        tokio::task::spawn_blocking(move || {
+                            if let Ok(store) = store.lock() {
+                                for msg in &new_messages {
+                                    let session_msg = SessionMessage::from_llm_message(msg, &sid);
+                                    if let Err(e) = store.add_message(&session_msg) {
+                                        tracing::warn!("Failed to persist message: {e}");
+                                    }
+                                }
+                            }
+                        });
+
+                        // Update persisted count.
+                        let mut sessions = self.sessions.write().await;
+                        if let Some(entry) = sessions.get_mut(key) {
+                            entry.persisted_message_count += new_count;
+                        }
+                    }
+                }
+
+                // 5c. Spawn background review if due.
                 if should_review {
                     let messages_snapshot = agent.session().messages.clone();
                     self.spawn_background_review(messages_snapshot).await;
