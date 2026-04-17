@@ -999,6 +999,154 @@ html, body {
   cursor: pointer;
   accent-color: var(--text);
 }
+
+/* ── About & Updates section ── */
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+.update-version {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #666;
+}
+.check-updates-btn {
+  padding: 6px 12px;
+  background: var(--white);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.check-updates-btn:hover:not(:disabled) { background: var(--bg); }
+.check-updates-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.update-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #666;
+  min-height: 16px;
+}
+.update-status.info { color: #666; }
+.update-status.success { color: #2d7a2d; }
+.update-status.error { color: var(--accent); }
+
+/* ── Update modal ── */
+.update-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 200;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.update-modal-backdrop.open { display: flex; }
+.update-modal {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  width: min(480px, calc(100% - 40px));
+  max-height: calc(100% - 40px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+.update-modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 15px;
+}
+.update-modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.update-version-line {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: #333;
+  margin-bottom: 12px;
+}
+.update-version-line .new {
+  color: #2d7a2d;
+  font-weight: 600;
+}
+.update-notes-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.update-notes {
+  font-size: 13px;
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: var(--code-bg);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.update-progress-container {
+  margin-top: 14px;
+  display: none;
+}
+.update-progress-container.active { display: block; }
+.update-progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.update-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0%;
+  transition: width 0.2s;
+}
+.update-progress-text {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #666;
+  font-family: var(--mono);
+}
+.update-modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.update-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid var(--input-border);
+  background: var(--white);
+  color: var(--text);
+}
+.update-btn.primary {
+  background: var(--accent);
+  color: var(--white);
+  border-color: var(--accent);
+}
+.update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -1128,11 +1276,46 @@ html, body {
         <!-- Populated dynamically from /api/toolsets -->
       </div>
     </div>
+
+    <!-- About & Updates (desktop only) -->
+    <div class="settings-group" id="updatesGroup" style="display: none;">
+      <label class="settings-label">ABOUT</label>
+      <div class="update-row">
+        <span class="update-version" id="appVersion">v—</span>
+        <button class="check-updates-btn" id="checkUpdatesBtn">Check for Updates</button>
+      </div>
+      <div class="update-status" id="updateStatus"></div>
+    </div>
   </div>
 
   <div class="settings-footer">
     <button class="settings-save-btn" id="settingsSaveBtn">Save</button>
     <div class="settings-status" id="settingsStatus"></div>
+  </div>
+</div>
+
+<!-- Update modal -->
+<div class="update-modal-backdrop" id="updateModalBackdrop">
+  <div class="update-modal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+    <div class="update-modal-header" id="updateModalTitle">Update Available</div>
+    <div class="update-modal-body">
+      <div class="update-version-line">
+        Current: <span id="updateCurrentVersion">—</span>
+        → New: <span class="new" id="updateNewVersion">—</span>
+      </div>
+      <div class="update-notes-label">Release Notes</div>
+      <div class="update-notes" id="updateNotes">—</div>
+      <div class="update-progress-container" id="updateProgressContainer">
+        <div class="update-progress-track">
+          <div class="update-progress-fill" id="updateProgressFill"></div>
+        </div>
+        <div class="update-progress-text" id="updateProgressText">Preparing download…</div>
+      </div>
+    </div>
+    <div class="update-modal-footer">
+      <button class="update-btn" id="updateLaterBtn">Later</button>
+      <button class="update-btn primary" id="updateInstallBtn">Install &amp; Restart</button>
+    </div>
   </div>
 </div>
 
@@ -1853,6 +2036,114 @@ html, body {
     // Focus input
     msgInput.focus();
   });
+
+  // ── Updater (Tauri desktop only) ──
+  (function initUpdater() {
+    var tauri = (typeof window !== 'undefined') ? window.__TAURI__ : null;
+    if (!tauri || !tauri.core || !tauri.event) return;
+
+    var invoke = tauri.core.invoke;
+    var listen = tauri.event.listen;
+    var getVersion = tauri.app && tauri.app.getVersion;
+
+    var updatesGroup = document.getElementById('updatesGroup');
+    var checkBtn = document.getElementById('checkUpdatesBtn');
+    var versionEl = document.getElementById('appVersion');
+    var statusEl = document.getElementById('updateStatus');
+    var backdrop = document.getElementById('updateModalBackdrop');
+    var currentEl = document.getElementById('updateCurrentVersion');
+    var newEl = document.getElementById('updateNewVersion');
+    var notesEl = document.getElementById('updateNotes');
+    var progContainer = document.getElementById('updateProgressContainer');
+    var progFill = document.getElementById('updateProgressFill');
+    var progText = document.getElementById('updateProgressText');
+    var laterBtn = document.getElementById('updateLaterBtn');
+    var installBtn = document.getElementById('updateInstallBtn');
+
+    updatesGroup.style.display = '';
+
+    if (getVersion) {
+      getVersion().then(function(v) { versionEl.textContent = 'v' + v; }).catch(function() {});
+    }
+
+    function setStatus(text, level) {
+      statusEl.className = 'update-status ' + (level || 'info');
+      statusEl.textContent = text || '';
+    }
+
+    function openModal(info) {
+      currentEl.textContent = 'v' + info.current_version;
+      newEl.textContent = 'v' + info.version;
+      notesEl.textContent = info.notes && info.notes.trim() ? info.notes : '(no release notes)';
+      progContainer.classList.remove('active');
+      progFill.style.width = '0%';
+      progText.textContent = 'Preparing download…';
+      installBtn.disabled = false;
+      laterBtn.disabled = false;
+      backdrop.classList.add('open');
+    }
+    function closeModal() { backdrop.classList.remove('open'); }
+
+    function fmtBytes(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+      return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    laterBtn.addEventListener('click', closeModal);
+
+    installBtn.addEventListener('click', async function() {
+      installBtn.disabled = true;
+      laterBtn.disabled = true;
+      progContainer.classList.add('active');
+      try {
+        await invoke('install_update');
+        // App should restart; if we reach here, surface nothing further.
+      } catch (e) {
+        var msg = (e && e.toString) ? e.toString() : String(e);
+        progText.textContent = 'Update failed: ' + msg;
+        setStatus('Update failed: ' + msg, 'error');
+        installBtn.disabled = false;
+        laterBtn.disabled = false;
+      }
+    });
+
+    checkBtn.addEventListener('click', async function() {
+      checkBtn.disabled = true;
+      setStatus('Checking for updates…', 'info');
+      try {
+        var avail = await invoke('get_updater_availability');
+        if (!avail.available) {
+          setStatus(avail.reason || 'Updater unavailable on this platform.', 'info');
+          return;
+        }
+        var info = await invoke('check_for_update');
+        if (info) {
+          setStatus('New version v' + info.version + ' available.', 'success');
+          openModal(info);
+        } else {
+          setStatus('You are on the latest version.', 'success');
+        }
+      } catch (e) {
+        var msg = (e && e.toString) ? e.toString() : String(e);
+        setStatus('Check failed: ' + msg, 'error');
+      } finally {
+        checkBtn.disabled = false;
+      }
+    });
+
+    listen('update-available', function(evt) { openModal(evt.payload); });
+    listen('update-progress', function(evt) {
+      var p = evt.payload || {};
+      if (p.total) {
+        var pct = Math.min(100, Math.round(p.downloaded * 100 / p.total));
+        progFill.style.width = pct + '%';
+        progText.textContent = pct + '% (' + fmtBytes(p.downloaded) + ' / ' + fmtBytes(p.total) + ')';
+      } else {
+        progText.textContent = fmtBytes(p.downloaded) + ' downloaded';
+      }
+    });
+  })();
 
   // Focus input on load
   msgInput.focus();

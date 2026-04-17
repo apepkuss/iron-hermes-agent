@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod tray;
+mod updater;
 
 use tracing::info;
 
@@ -27,6 +28,12 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            updater::get_updater_availability,
+            updater::check_for_update,
+            updater::install_update,
+        ])
         .setup(move |app| {
             let url = format!("http://127.0.0.1:{port}");
 
@@ -41,6 +48,7 @@ fn main() {
             .build()?;
 
             tray::setup_tray(app.handle())?;
+            updater::spawn_startup_check(app.handle().clone());
 
             Ok(())
         })
