@@ -116,6 +116,36 @@ html, body {
   border-color: var(--text);
 }
 
+.model-selector .refresh-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--input-border);
+  border-radius: 2px;
+  background: var(--white);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.model-selector .refresh-btn:hover:not(:disabled) { background: var(--bg); }
+.model-selector .refresh-btn:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+.model-selector .refresh-btn.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ── New Chat button ── */
 .new-chat-btn {
   position: absolute;
@@ -980,6 +1010,7 @@ html, body {
     <div class="model-selector">
       <label for="modelSelect">MODEL</label>
       <select id="modelSelect"><option value="">loading...</option></select>
+      <button class="refresh-btn" id="refreshModelsBtn" title="Refresh models">⟳</button>
     </div>
     <button class="settings-btn" id="settingsBtn" title="Settings">⚙</button>
   </header>
@@ -1198,6 +1229,22 @@ html, body {
     await populateAuxModelSelect(models, undefined);
   }
   initModels();
+
+  // ── Manual refresh button ──
+  const refreshModelsBtn = document.getElementById('refreshModelsBtn');
+  refreshModelsBtn.addEventListener('click', async function() {
+    if (refreshModelsBtn.disabled) return;
+    refreshModelsBtn.disabled = true;
+    refreshModelsBtn.classList.add('spinning');
+    try {
+      const models = await loadModels(null);
+      await populateMainModelSelect(models);
+      await populateAuxModelSelect(models, undefined);
+    } finally {
+      refreshModelsBtn.classList.remove('spinning');
+      refreshModelsBtn.disabled = false;
+    }
+  });
 
   // ── Load config from API ──
   async function loadConfig() {
