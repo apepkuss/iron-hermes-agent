@@ -1,11 +1,7 @@
-use std::sync::Arc;
-
-use tokio::net::TcpListener;
 use tracing::info;
 
 use iron_server::config::IronConfig;
-use iron_server::state::build_app_state;
-use iron_server::{build_router, init_tracing};
+use iron_server::{init_tracing, spawn_server};
 
 #[tokio::main]
 async fn main() {
@@ -13,13 +9,15 @@ async fn main() {
 
     let config = IronConfig::load();
     let addr = format!("{}:{}", config.server.host, config.server.port);
-    let port = config.server.port;
-    let state = Arc::new(build_app_state(config));
 
-    let app = build_router(state);
+    let port = spawn_server(&addr)
+        .await
+        .expect("failed to start iron-hermes server");
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
     info!("iron-hermes server listening on http://{addr}");
     info!("Open your browser: http://localhost:{port}");
-    axum::serve(listener, app).await.unwrap();
+
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install ctrl-c handler");
 }

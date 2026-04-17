@@ -2,11 +2,14 @@ pub mod config;
 pub mod routes;
 pub mod state;
 
+use std::io;
 use std::sync::Arc;
 
 use axum::Router;
 use axum::routing::{get, post};
+use tokio::net::TcpListener;
 
+use crate::config::IronConfig;
 use crate::routes::chat::chat_completions;
 use crate::routes::config_api::{get_config, list_toolsets, update_config};
 use crate::routes::health::health;
@@ -15,7 +18,7 @@ use crate::routes::models_status::models_status;
 use crate::routes::session::reset_session;
 use crate::routes::session_search::search_sessions;
 use crate::routes::static_files;
-use crate::state::AppState;
+use crate::state::{AppState, build_app_state};
 
 pub fn init_tracing() {
     tracing_subscriber::fmt()
@@ -40,4 +43,21 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/session/reset", post(reset_session))
         .route("/api/sessions/search", get(search_sessions))
         .with_state(state)
+}
+
+pub async fn spawn_server(bind_addr: &str) -> io::Result<u16> {
+    let config = IronConfig::load();
+    let state = Arc::new(build_app_state(config));
+    let app = build_router(state);
+
+    let listener = TcpListener::bind(bind_addr).await?;
+    let port = listener.local_addr()?.port();
+
+    tokio::spawn(async move {
+        if let Err(e) = axum::serve(listener, app).await {
+            tracing::error!("axum server exited with error: {e}");
+        }
+    });
+
+    Ok(port)
 }
