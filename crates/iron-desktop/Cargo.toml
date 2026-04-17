@@ -1,0 +1,15 @@
+[package]
+name = "iron-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+iron-server = { path = "../iron-server" }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

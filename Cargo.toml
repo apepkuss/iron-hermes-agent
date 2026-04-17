@@ -8,6 +8,7 @@ members = [
     "crates/iron-tools",
     "crates/iron-sandbox",
     "crates/iron-server",
+    "crates/iron-desktop",
 ]
 
 [workspace.package]
