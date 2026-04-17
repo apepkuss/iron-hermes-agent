@@ -45,8 +45,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .with_state(state)
 }
 
-pub async fn spawn_server(bind_addr: &str) -> io::Result<u16> {
-    let config = IronConfig::load();
+pub async fn spawn_server(config: IronConfig, bind_addr: &str) -> io::Result<u16> {
     let state = Arc::new(build_app_state(config));
     let app = build_router(state);
 

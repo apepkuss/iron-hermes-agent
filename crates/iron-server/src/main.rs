@@ -10,7 +10,7 @@ async fn main() {
     let config = IronConfig::load();
     let addr = format!("{}:{}", config.server.host, config.server.port);
 
-    let port = spawn_server(&addr)
+    let port = spawn_server(config, &addr)
         .await
         .expect("failed to start iron-hermes server");
 

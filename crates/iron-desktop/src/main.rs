@@ -4,6 +4,7 @@ mod tray;
 
 use tracing::info;
 
+use iron_server::config::IronConfig;
 use iron_server::{init_tracing, spawn_server};
 
 fn main() {
@@ -12,7 +13,8 @@ fn main() {
     let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
 
     let port = rt.block_on(async {
-        let port = spawn_server("127.0.0.1:0")
+        let config = IronConfig::load();
+        let port = spawn_server(config, "127.0.0.1:0")
             .await
             .expect("failed to start iron-hermes server");
         info!("iron-hermes server started on http://127.0.0.1:{port}");
