@@ -26,6 +26,15 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install system dependencies (for iron-desktop / Tauri)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
       - name: Cache cargo registry & build
         uses: actions/cache@v4
         with:
@@ -83,4 +92,4 @@ jobs:
           key: build-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        run: cargo build --release
+        run: cargo build --release -p iron-server
