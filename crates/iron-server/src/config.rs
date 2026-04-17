@@ -19,7 +19,7 @@ mod defaults {
         "0.0.0.0".to_string()
     }
     pub fn port() -> u16 {
-        8080
+        9069
     }
     pub fn model_name() -> String {
         "iron-hermes".to_string()

@@ -8,7 +8,7 @@ fn test_default_config_complete() {
     assert!(config.api_key.is_none());
     assert!(config.context_length.is_none());
     assert_eq!(config.server.host, "0.0.0.0");
-    assert_eq!(config.server.port, 8080);
+    assert_eq!(config.server.port, 9069);
     assert_eq!(config.server.model_name, "iron-hermes");
     assert!(config.server.auth_token.is_none());
     assert_eq!(config.agent.max_turns, 90);
@@ -92,7 +92,7 @@ agent:
     assert_eq!(config.base_url, "http://localhost:9068");
     assert_eq!(config.agent.max_turns, 90);
     assert_eq!(config.agent.inactivity_timeout, 300);
-    assert_eq!(config.server.port, 8080);
+    assert_eq!(config.server.port, 9069);
     assert!(config.compression.enabled);
 }
 
@@ -102,7 +102,7 @@ fn test_yaml_parse_empty() {
     let config: IronConfig = serde_yaml::from_str("").unwrap();
     assert_eq!(config.model, "llama3");
     assert_eq!(config.base_url, "http://localhost:9068");
-    assert_eq!(config.server.port, 8080);
+    assert_eq!(config.server.port, 9069);
 }
 
 #[test]
@@ -221,7 +221,7 @@ fn test_generate_default_config() {
     let parsed: IronConfig = serde_yaml::from_str(&content).unwrap();
     assert_eq!(parsed.model, "llama3");
     assert_eq!(parsed.base_url, "http://localhost:9068");
-    assert_eq!(parsed.server.port, 8080);
+    assert_eq!(parsed.server.port, 9069);
 }
 
 #[test]

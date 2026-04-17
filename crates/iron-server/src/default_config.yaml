@@ -16,7 +16,7 @@ server:
   # 绑定地址
   host: "0.0.0.0"
   # 绑定端口
-  port: 8080
+  port: 9069
   # 对外暴露的模型名称（/v1/models 端点）
   model_name: "iron-hermes"
   # 请求认证 token（空 = 不启用认证）

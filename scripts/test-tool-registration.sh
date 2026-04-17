@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-SERVER_URL="${SERVER_URL:-http://localhost:8080}"
+SERVER_URL="${SERVER_URL:-http://localhost:9069}"
 MODEL="${LLM_MODEL:-iron-hermes}"
 
 GREEN='\033[0;32m'

@@ -89,7 +89,7 @@ iron-hermes-desktop
 
 ## CLI 服务端
 
-CLI 版本不含窗口，只起 HTTP 服务；用任意浏览器访问 `http://localhost:8080` 即可。适合无头服务器或作为后台常驻服务。
+CLI 版本不含窗口，只起 HTTP 服务；用任意浏览器访问 `http://localhost:9069` 即可。适合无头服务器或作为后台常驻服务。
 
 ### 下载
 
@@ -211,8 +211,8 @@ sudo apt install libfuse2
 **桌面应用显示 "updater unavailable"**
 `.deb` 用户会看到此提示 —— 系统包管理器管理的安装路径应用无法自己替换。请使用 `sudo apt upgrade`，或改用 AppImage 版本以支持应用内更新。
 
-**8080 端口被占用**
-修改 `~/.iron-hermes/config.yaml` 中的 `server.port`，或启动前设置环境变量 `IRON_PORT=8081`。
+**9069 端口被占用**
+修改 `~/.iron-hermes/config.yaml` 中的 `server.port`，或启动前设置环境变量 `IRON_PORT=<新端口>`。
 
 **桌面应用更新时提示 "signature verification failed"**
 下载的更新包签名校验失败 —— 可能是下载不完整或网络中间人。重试即可；若持续出现，请提交 issue。

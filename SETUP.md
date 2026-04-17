@@ -88,7 +88,7 @@ The public key is compiled into the binary, so only releases signed by the maint
 
 ## CLI Server
 
-The CLI ships the same service without a window. You run it and access the WebUI at `http://localhost:8080` in any browser — ideal for headless servers or background daemons.
+The CLI ships the same service without a window. You run it and access the WebUI at `http://localhost:9069` in any browser — ideal for headless servers or background daemons.
 
 ### Download
 
@@ -210,8 +210,8 @@ sudo apt install libfuse2
 **Desktop app shows "updater unavailable"**
 Expected on `.deb` installs — apt manages the install and the app cannot replace system-owned files. Use `sudo apt upgrade` or switch to the AppImage version.
 
-**Port 8080 already in use**
-Change `server.port` in `~/.iron-hermes/config.yaml` or export `IRON_PORT=8081` before launching.
+**Port 9069 already in use**
+Change `server.port` in `~/.iron-hermes/config.yaml` or export `IRON_PORT=<new-port>` before launching.
 
 **Desktop app update fails with "signature verification failed"**
 The downloaded archive doesn't match the expected signature — likely a corrupted download or a network MITM. Retry; if it persists, file an issue.
