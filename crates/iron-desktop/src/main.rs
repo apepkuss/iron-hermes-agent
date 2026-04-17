@@ -38,7 +38,15 @@ fn main() {
             .min_inner_size(480.0, 600.0)
             .build()?;
 
+            tray::setup_tray(app.handle())?;
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let _ = window.hide();
+                api.prevent_close();
+            }
         })
         .run(tauri::generate_context!())
         .expect("failed to run tauri application");
