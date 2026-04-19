@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IRON HERMES</title>
+<link rel="icon" type="image/png" href="/assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -154,29 +155,9 @@ button, input, select, textarea {
 .sidebar-logo-mark {
   width: 28px;
   height: 28px;
-  position: relative;
   flex-shrink: 0;
-}
-.sidebar-logo-mark .geo-circle {
-  position: absolute; inset: 0;
-  border: 2px solid var(--text-primary);
-  border-radius: 50%;
-  box-sizing: border-box;
-}
-.sidebar-logo-mark .geo-square {
-  position: absolute;
-  top: 8px; left: 8px;
-  width: 12px; height: 12px;
-  border: 2px solid var(--text-primary);
-  border-radius: 2px;
-  box-sizing: border-box;
-}
-.sidebar-logo-mark .geo-diamond {
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 4px; height: 4px;
-  background: var(--text-primary);
-  transform: translate(-50%, -50%) rotate(45deg);
+  display: block;
+  object-fit: contain;
 }
 
 .sidebar-logo-text {
@@ -1354,11 +1335,7 @@ button, input, select, textarea {
   <!-- ── Sidebar ── -->
   <aside class="app-sidebar" id="appSidebar">
     <div class="sidebar-logo">
-      <div class="sidebar-logo-mark">
-        <div class="geo-circle"></div>
-        <div class="geo-square"></div>
-        <div class="geo-diamond"></div>
-      </div>
+      <img class="sidebar-logo-mark" src="/assets/logo.png" alt="Iron Hermes">
       <span class="sidebar-logo-text">Iron Hermes</span>
     </div>
 
