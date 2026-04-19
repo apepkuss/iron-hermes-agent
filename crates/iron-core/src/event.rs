@@ -34,7 +34,7 @@ pub struct TodoItem {
 /// 事件回调类型。
 pub type EventCallback = Box<dyn Fn(AgentEvent) + Send + Sync>;
 
-/// 按字符（非字节）截断字符串；超过 `max_chars` 时追加 `…`。
+/// 按字符（非字节）截断字符串；超过 `max_chars` 时追加 `...`。
 ///
 /// 注意：必须按字符边界切分，否则对 UTF-8 多字节字符（如中文）做字节切片
 /// 会触发 panic：`byte index N is not a char boundary`。
@@ -42,7 +42,7 @@ fn truncate_chars(s: &str, max_chars: usize) -> String {
     let mut iter = s.chars();
     let head: String = iter.by_ref().take(max_chars).collect();
     if iter.next().is_some() {
-        format!("{head}…")
+        format!("{head}...")
     } else {
         head
     }
