@@ -178,6 +178,156 @@ button, input, select, textarea {
   gap: 2px;
 }
 
+/* Search box */
+.history-search {
+  position: relative;
+  margin: 10px 2px 4px;
+}
+.history-search input {
+  width: 100%;
+  padding: 7px 28px 7px 30px;
+  font-size: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.history-search input:focus {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
+}
+.history-search input::placeholder { color: var(--text-muted); }
+.history-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+  display: flex;
+}
+.history-search-icon svg {
+  width: 13px; height: 13px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+}
+.history-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.history-search-clear:hover { color: var(--text-primary); background: var(--border-light); }
+.history-search-clear svg {
+  width: 11px; height: 11px;
+  stroke: currentColor; fill: none;
+  stroke-width: 1.8; stroke-linecap: round;
+}
+.history-search.has-value .history-search-clear { display: inline-flex; }
+
+/* History list */
+.history-section { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.history-group-label {
+  padding: 14px 12px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px 7px 12px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  transition: background-color 0.12s ease, color 0.12s ease;
+  position: relative;
+}
+.history-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+.history-item.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.history-item-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  min-width: 0;
+}
+.history-item-actions {
+  display: none;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.history-item:hover .history-item-actions,
+.history-item:focus-within .history-item-actions {
+  display: inline-flex;
+}
+.history-item-btn {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.history-item-btn:hover {
+  background: var(--border-light);
+  color: var(--text-primary);
+}
+.history-item-btn.danger:hover {
+  color: var(--error);
+}
+.history-item-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.history-loader,
+.history-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -537,36 +687,12 @@ button, input, select, textarea {
   height: 40px;
   flex-shrink: 0;
   margin-top: 2px;
-  position: relative;
   border-radius: 10px;
+  object-fit: contain;
   background: var(--bg-card);
   border: 1px solid var(--border-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.msg-avatar .geo-circle {
-  position: absolute;
-  width: 22px; height: 22px;
-  top: 8px; left: 8px;
-  border: 2px solid var(--text-primary);
-  border-radius: 50%;
+  padding: 3px;
   box-sizing: border-box;
-}
-.msg-avatar .geo-square {
-  position: absolute;
-  width: 10px; height: 10px;
-  top: 14px; left: 14px;
-  border: 2px solid var(--text-primary);
-  border-radius: 2px;
-  box-sizing: border-box;
-}
-.msg-avatar .geo-diamond {
-  position: absolute;
-  width: 3px; height: 3px;
-  top: 50%; left: 50%;
-  background: var(--text-primary);
-  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 .message-assistant .msg-body {
@@ -1339,11 +1465,23 @@ button, input, select, textarea {
       <span class="sidebar-logo-text">Iron Hermes</span>
     </div>
 
-    <nav class="sidebar-nav">
-      <button class="nav-item active" id="newChatBtn" data-i18n-title="sidebar.newChat" title="New Chat">
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button class="nav-item" id="newChatBtn" data-i18n-title="sidebar.newChat" title="New Chat">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
         <span data-i18n="sidebar.newChat">New Chat</span>
       </button>
+      <div class="history-search" id="historySearch">
+        <span class="history-search-icon">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input id="historySearchInput" type="text" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search sessions...">
+        <button class="history-search-clear" id="historySearchClear" type="button" data-i18n-title="btn.close" title="Clear">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="history-section" id="historySection"></div>
+      <div class="history-loader" id="historyLoader" style="display:none;" data-i18n="sidebar.loading">Loading...</div>
+      <div class="history-empty" id="historyEmpty" style="display:none;" data-i18n="sidebar.historyEmpty">No sessions yet</div>
     </nav>
 
     <div class="sidebar-footer">
@@ -1519,6 +1657,20 @@ button, input, select, textarea {
   const I18N = {
     en: {
       'sidebar.newChat': 'New Chat',
+      'sidebar.loading': 'Loading...',
+      'sidebar.historyEmpty': 'No sessions yet',
+      'sidebar.searchPlaceholder': 'Search sessions...',
+      'sidebar.searchEmpty': 'No matches',
+      'sidebar.searchResults': 'Search results',
+      'sidebar.today': 'Today',
+      'sidebar.yesterday': 'Yesterday',
+      'sidebar.last7days': 'Previous 7 Days',
+      'sidebar.last30days': 'Previous 30 Days',
+      'sidebar.older': 'Older',
+      'session.rename': 'Rename',
+      'session.delete': 'Delete',
+      'session.renamePrompt': 'Rename session (leave empty to reset):',
+      'session.confirmDelete': 'Delete this session? This cannot be undone.',
       'header.title': 'Chat',
       'header.model': 'Model',
       'input.placeholder': 'Message Iron Hermes...',
@@ -1579,6 +1731,20 @@ button, input, select, textarea {
     },
     zh: {
       'sidebar.newChat': '新建会话',
+      'sidebar.loading': '加载中...',
+      'sidebar.historyEmpty': '暂无会话',
+      'sidebar.searchPlaceholder': '搜索会话...',
+      'sidebar.searchEmpty': '无匹配结果',
+      'sidebar.searchResults': '搜索结果',
+      'sidebar.today': '今天',
+      'sidebar.yesterday': '昨天',
+      'sidebar.last7days': '最近 7 天',
+      'sidebar.last30days': '最近 30 天',
+      'sidebar.older': '更早',
+      'session.rename': '重命名',
+      'session.delete': '删除',
+      'session.renamePrompt': '重命名会话（留空恢复默认）：',
+      'session.confirmDelete': '确定删除该会话吗？此操作不可恢复。',
       'header.title': '对话',
       'header.model': '模型',
       'input.placeholder': '向 Iron Hermes 发消息...',
@@ -1679,6 +1845,7 @@ button, input, select, textarea {
     document.documentElement.setAttribute('lang', loc === 'zh' ? 'zh-CN' : 'en');
     applyI18n();
     syncLangPopover();
+    if (typeof renderHistory === 'function') renderHistory();
   }
 
   const chatArea = document.getElementById('chatArea');
@@ -2066,13 +2233,9 @@ button, input, select, textarea {
     }
   }
 
-  // Geo-avatar HTML (CSS-drawn Iron Hermes mark)
+  // Assistant avatar HTML
   function geoAvatarHtml() {
-    return '<div class="msg-avatar">' +
-      '<div class="geo-circle"></div>' +
-      '<div class="geo-square"></div>' +
-      '<div class="geo-diamond"></div>' +
-      '</div>';
+    return '<img class="msg-avatar" src="/assets/logo.png" alt="">';
   }
 
   // ── Append a message to DOM ──
@@ -2294,6 +2457,9 @@ button, input, select, textarea {
     setStreaming(false);
     currentAssistantDiv = null;
     scrollToBottom();
+    if (typeof ensureCurrentInHistory === 'function') {
+      ensureCurrentInHistory();
+    }
   }
 
   function escapeHtml(text) {
@@ -2376,8 +2542,289 @@ button, input, select, textarea {
     scrollToBottom();
   }
 
-  // ── New Chat button ──
-  document.getElementById('newChatBtn').addEventListener('click', function() {
+  // ── Session history ──
+  const historySection = document.getElementById('historySection');
+  const historyLoader = document.getElementById('historyLoader');
+  const historyEmpty = document.getElementById('historyEmpty');
+  const sidebarNav = document.getElementById('sidebarNav');
+  const historySearchWrap = document.getElementById('historySearch');
+  const historySearchInput = document.getElementById('historySearchInput');
+  const historySearchClear = document.getElementById('historySearchClear');
+  const HISTORY_PAGE_SIZE = 30;
+  const SEARCH_LIMIT = 50;
+  const SEARCH_DEBOUNCE_MS = 250;
+
+  const historyState = {
+    items: [],
+    offset: 0,
+    hasMore: true,
+    loading: false,
+  };
+
+  const searchState = {
+    active: false,
+    query: '',
+    items: [],
+    loading: false,
+  };
+
+  function dayDiff(iso) {
+    // Returns number of whole days between today (local) and the given UTC date
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return Infinity;
+    var today = new Date();
+    var a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    var b = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    return Math.floor((b - a) / 86400000);
+  }
+
+  function groupKeyFor(iso) {
+    var diff = dayDiff(iso);
+    if (diff <= 0) return 'today';
+    if (diff === 1) return 'yesterday';
+    if (diff <= 7) return 'last7days';
+    if (diff <= 30) return 'last30days';
+    return 'older';
+  }
+
+  const GROUP_ORDER = ['today', 'yesterday', 'last7days', 'last30days', 'older'];
+  const GROUP_LABEL_KEY = {
+    today: 'sidebar.today',
+    yesterday: 'sidebar.yesterday',
+    last7days: 'sidebar.last7days',
+    last30days: 'sidebar.last30days',
+    older: 'sidebar.older',
+  };
+
+  function renderHistory() {
+    historySection.innerHTML = '';
+    var frag = document.createDocumentFragment();
+
+    if (searchState.active) {
+      if (searchState.items.length === 0) {
+        historyEmpty.style.display = searchState.loading ? 'none' : '';
+        historyEmpty.textContent = t('sidebar.searchEmpty');
+        return;
+      }
+      historyEmpty.style.display = 'none';
+      var label = document.createElement('div');
+      label.className = 'history-group-label';
+      label.textContent = t('sidebar.searchResults');
+      frag.appendChild(label);
+      searchState.items.forEach(function(item) {
+        frag.appendChild(buildHistoryItem(item));
+      });
+      historySection.appendChild(frag);
+      updateActiveHistoryItem();
+      return;
+    }
+
+    if (historyState.items.length === 0) {
+      historyEmpty.style.display = historyState.loading ? 'none' : '';
+      historyEmpty.textContent = t('sidebar.historyEmpty');
+      return;
+    }
+    historyEmpty.style.display = 'none';
+
+    // Group by day bucket, preserve source order (already sorted DESC)
+    var buckets = {};
+    historyState.items.forEach(function(item) {
+      var key = groupKeyFor(item.started_at);
+      if (!buckets[key]) buckets[key] = [];
+      buckets[key].push(item);
+    });
+
+    GROUP_ORDER.forEach(function(gkey) {
+      var list = buckets[gkey];
+      if (!list || list.length === 0) return;
+      var label = document.createElement('div');
+      label.className = 'history-group-label';
+      label.textContent = t(GROUP_LABEL_KEY[gkey]);
+      frag.appendChild(label);
+      list.forEach(function(item) {
+        frag.appendChild(buildHistoryItem(item));
+      });
+    });
+    historySection.appendChild(frag);
+    updateActiveHistoryItem();
+  }
+
+  function buildHistoryItem(item) {
+    var btn = document.createElement('div');
+    btn.className = 'history-item';
+    btn.dataset.sessionId = item.id;
+    btn.title = item.display_title || item.id;
+
+    var title = document.createElement('span');
+    title.className = 'history-item-title';
+    title.textContent = item.display_title || item.id;
+    btn.appendChild(title);
+
+    var actions = document.createElement('span');
+    actions.className = 'history-item-actions';
+
+    var renameBtn = document.createElement('button');
+    renameBtn.className = 'history-item-btn';
+    renameBtn.type = 'button';
+    renameBtn.title = t('session.rename');
+    renameBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4z"/></svg>';
+    renameBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      handleRename(item);
+    });
+
+    var delBtn = document.createElement('button');
+    delBtn.className = 'history-item-btn danger';
+    delBtn.type = 'button';
+    delBtn.title = t('session.delete');
+    delBtn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+    delBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      handleDelete(item);
+    });
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(delBtn);
+    btn.appendChild(actions);
+
+    btn.addEventListener('click', function() {
+      switchToSession(item.id);
+    });
+    return btn;
+  }
+
+  function updateActiveHistoryItem() {
+    historySection.querySelectorAll('.history-item').forEach(function(el) {
+      el.classList.toggle('active', el.dataset.sessionId === chatId);
+    });
+  }
+
+  async function fetchHistoryPage() {
+    if (historyState.loading || !historyState.hasMore) return;
+    historyState.loading = true;
+    historyLoader.style.display = '';
+    try {
+      var url = '/api/sessions?limit=' + HISTORY_PAGE_SIZE + '&offset=' + historyState.offset;
+      var resp = await fetch(url);
+      if (!resp.ok) return;
+      var data = await resp.json();
+      var newItems = data.items || [];
+      historyState.items = historyState.items.concat(newItems);
+      historyState.offset += newItems.length;
+      historyState.hasMore = !!data.has_more;
+      renderHistory();
+    } catch (e) {
+      // Silent fail: list just stays as-is
+    } finally {
+      historyState.loading = false;
+      historyLoader.style.display = 'none';
+    }
+  }
+
+  sidebarNav.addEventListener('scroll', function() {
+    if (searchState.active) return;
+    if (historyState.loading || !historyState.hasMore) return;
+    var threshold = 80;
+    if (sidebarNav.scrollTop + sidebarNav.clientHeight >= sidebarNav.scrollHeight - threshold) {
+      fetchHistoryPage();
+    }
+  });
+
+  function syncItemAcrossLists(id, patch) {
+    function apply(list) {
+      list.forEach(function(x) {
+        if (x.id === id) {
+          if (patch.title !== undefined) x.title = patch.title;
+          if (patch.display_title !== undefined) x.display_title = patch.display_title;
+        }
+      });
+    }
+    apply(historyState.items);
+    apply(searchState.items);
+  }
+
+  function removeItemAcrossLists(id) {
+    historyState.items = historyState.items.filter(function(x) { return x.id !== id; });
+    searchState.items = searchState.items.filter(function(x) { return x.id !== id; });
+    if (historyState.offset > 0) historyState.offset -= 1;
+  }
+
+  async function handleRename(item) {
+    var current = item.title || '';
+    var next = window.prompt(t('session.renamePrompt'), current);
+    if (next === null) return;
+    var trimmed = next.trim();
+    try {
+      var resp = await fetch('/api/sessions/' + encodeURIComponent(item.id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: trimmed === '' ? null : trimmed }),
+      });
+      if (!resp.ok) return;
+      var data = await resp.json();
+      syncItemAcrossLists(item.id, {
+        title: data.title || null,
+        display_title: data.display_title || item.display_title,
+      });
+      renderHistory();
+    } catch (e) {}
+  }
+
+  async function handleDelete(item) {
+    if (!window.confirm(t('session.confirmDelete'))) return;
+    try {
+      var resp = await fetch('/api/sessions/' + encodeURIComponent(item.id), {
+        method: 'DELETE',
+      });
+      if (!resp.ok) return;
+      removeItemAcrossLists(item.id);
+      renderHistory();
+      if (item.id === chatId) {
+        startNewChat();
+      }
+    } catch (e) {}
+  }
+
+  async function switchToSession(id) {
+    if (id === chatId && messages.length > 0) return; // already active + loaded
+    chatId = id;
+    localStorage.setItem('iron_chat_id', chatId);
+    messages = [];
+    chatArea.innerHTML = '';
+    if (emptyState) {
+      chatArea.appendChild(emptyState);
+      emptyState.style.display = 'none';
+    }
+    updateActiveHistoryItem();
+    appSidebar.classList.remove('open');
+    await loadSessionMessages(id);
+  }
+
+  async function loadSessionMessages(id) {
+    try {
+      var resp = await fetch('/api/sessions/' + encodeURIComponent(id) + '/messages');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      var rows = data.messages || [];
+      rows.forEach(function(m) {
+        if (!m.content && !(m.role === 'assistant' && m.tool_calls)) return;
+        if (m.role === 'user') {
+          messages.push({ role: 'user', content: m.content || '' });
+          appendMessage('user', m.content || '', false);
+        } else if (m.role === 'assistant' && m.content) {
+          messages.push({ role: 'assistant', content: m.content });
+          appendMessage('assistant', m.content, false);
+        }
+        // tool / system messages are stored for runtime context but not
+        // re-rendered in the UI
+      });
+      if (messages.length === 0 && emptyState) {
+        emptyState.style.display = '';
+      }
+    } catch (e) {}
+  }
+
+  function startNewChat() {
     chatId = crypto.randomUUID();
     localStorage.setItem('iron_chat_id', chatId);
 
@@ -2396,10 +2843,95 @@ button, input, select, textarea {
       chatArea.appendChild(emptyState);
       emptyState.style.display = '';
     }
-    // Close mobile sidebar if open
+    updateActiveHistoryItem();
     appSidebar.classList.remove('open');
     msgInput.focus();
+  }
+
+  async function performSearch(query) {
+    if (!query) {
+      searchState.active = false;
+      searchState.query = '';
+      searchState.items = [];
+      renderHistory();
+      return;
+    }
+    searchState.active = true;
+    searchState.query = query;
+    searchState.loading = true;
+    renderHistory();
+    try {
+      var url = '/api/sessions?limit=' + SEARCH_LIMIT + '&q=' + encodeURIComponent(query);
+      var resp = await fetch(url);
+      if (!resp.ok) return;
+      var data = await resp.json();
+      if (searchState.query !== query) return; // stale response
+      searchState.items = data.items || [];
+      renderHistory();
+    } catch (e) {
+    } finally {
+      searchState.loading = false;
+    }
+  }
+
+  var searchDebounce = null;
+  historySearchInput.addEventListener('input', function() {
+    var v = historySearchInput.value.trim();
+    historySearchWrap.classList.toggle('has-value', v.length > 0);
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(function() {
+      performSearch(v);
+    }, SEARCH_DEBOUNCE_MS);
   });
+  historySearchInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      historySearchInput.value = '';
+      historySearchWrap.classList.remove('has-value');
+      performSearch('');
+      historySearchInput.blur();
+    }
+  });
+  historySearchClear.addEventListener('click', function() {
+    historySearchInput.value = '';
+    historySearchWrap.classList.remove('has-value');
+    performSearch('');
+    historySearchInput.focus();
+  });
+
+  async function ensureCurrentInHistory() {
+    if (historyState.items.some(function(x) { return x.id === chatId; })) {
+      return;
+    }
+    // Current session is new — refetch the top page and merge the latest
+    // item(s) in front, keeping any already-fetched pages below.
+    try {
+      var resp = await fetch('/api/sessions?limit=' + HISTORY_PAGE_SIZE + '&offset=0');
+      if (!resp.ok) return;
+      var data = await resp.json();
+      var top = data.items || [];
+      var existingIds = {};
+      historyState.items.forEach(function(x) { existingIds[x.id] = true; });
+      var merged = top.slice();
+      historyState.items.forEach(function(x) {
+        if (!top.some(function(t) { return t.id === x.id; })) merged.push(x);
+      });
+      historyState.items = merged;
+      if (historyState.offset < top.length) historyState.offset = top.length;
+      renderHistory();
+    } catch (e) {}
+  }
+
+  document.getElementById('newChatBtn').addEventListener('click', startNewChat);
+
+  // Initial history fetch + restore current session if it's in history
+  (async function() {
+    await fetchHistoryPage();
+    var inHistory = historyState.items.some(function(x) { return x.id === chatId; });
+    if (inHistory) {
+      await loadSessionMessages(chatId);
+      updateActiveHistoryItem();
+    }
+  })();
 
   // ── Updater (Tauri desktop only) ──
   (function initUpdater() {

@@ -19,7 +19,11 @@ pub struct SearchQuery {
     pub limit: Option<u32>,
 }
 
-/// GET `/api/sessions/search`
+/// GET `/api/sessions/search` — the LLM-tool-facing search endpoint. Limit is
+/// intentionally capped (matching the in-process session_search tool) because
+/// each result generates an LLM summary. For the WebUI sidebar search, use
+/// `GET /api/sessions?q=...` instead — that path skips summarization and
+/// returns a lightweight session list with `display_title` fallback.
 pub async fn search_sessions(
     State(state): State<Arc<AppState>>,
     Query(query): Query<SearchQuery>,

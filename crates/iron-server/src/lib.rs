@@ -42,6 +42,16 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/api/models/status", get(models_status))
         .route("/api/session/reset", post(reset_session))
         .route("/api/sessions/search", get(search_sessions))
+        .route("/api/sessions", get(crate::routes::sessions::list_sessions))
+        .route(
+            "/api/sessions/{id}",
+            axum::routing::patch(crate::routes::sessions::update_session)
+                .delete(crate::routes::sessions::delete_session),
+        )
+        .route(
+            "/api/sessions/{id}/messages",
+            get(crate::routes::sessions::get_session_messages),
+        )
         .with_state(state)
 }
 

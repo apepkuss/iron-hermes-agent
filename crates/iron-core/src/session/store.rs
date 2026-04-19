@@ -373,6 +373,88 @@ impl SessionStore {
         Ok(results)
     }
 
+    /// List sessions that have at least one user message, ordered by
+    /// `started_at` DESC. Filters out empty / system-only sessions.
+    pub fn list_non_empty_sessions(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<Session>, CoreError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, model, system_prompt, parent_session_id, started_at,
+                        ended_at, end_reason, message_count, tool_call_count, title
+                 FROM sessions
+                 WHERE EXISTS (
+                    SELECT 1 FROM messages m
+                    WHERE m.session_id = sessions.id AND m.role = 'user'
+                 )
+                 ORDER BY started_at DESC
+                 LIMIT ?1 OFFSET ?2",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to prepare query: {e}")))?;
+
+        let rows = stmt
+            .query_map(params![limit, offset], row_to_session)
+            .map_err(|e| CoreError::Session(format!("Failed to list sessions: {e}")))?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(
+                row.map_err(|e| CoreError::Session(format!("Failed to read session row: {e}")))?,
+            );
+        }
+        Ok(sessions)
+    }
+
+    /// Read the first user message content of a session, used as a display
+    /// title fallback when `title` is NULL.
+    pub fn first_user_message(&self, session_id: &str) -> Result<Option<String>, CoreError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT content FROM messages
+                 WHERE session_id = ?1 AND role = 'user'
+                 ORDER BY id ASC LIMIT 1",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to prepare query: {e}")))?;
+
+        let mut rows = stmt
+            .query_map(params![session_id], |row| row.get::<_, Option<String>>(0))
+            .map_err(|e| CoreError::Session(format!("Failed to query first user message: {e}")))?;
+
+        match rows.next() {
+            Some(Ok(content)) => Ok(content),
+            Some(Err(e)) => Err(CoreError::Session(format!(
+                "Failed to read first user message: {e}"
+            ))),
+            None => Ok(None),
+        }
+    }
+
+    /// Update the `title` column for a session.
+    pub fn update_session_title(
+        &self,
+        session_id: &str,
+        title: Option<&str>,
+    ) -> Result<(), CoreError> {
+        let rows = self
+            .conn
+            .execute(
+                "UPDATE sessions SET title = ?1 WHERE id = ?2",
+                params![title, session_id],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to update session title: {e}")))?;
+
+        if rows == 0 {
+            return Err(CoreError::Session(format!(
+                "Session not found: {session_id}"
+            )));
+        }
+        Ok(())
+    }
+
     /// Delete a session and all of its messages.
     pub fn delete_session(&self, session_id: &str) -> Result<(), CoreError> {
         self.conn
