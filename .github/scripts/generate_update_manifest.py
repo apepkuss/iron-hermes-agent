@@ -39,6 +39,15 @@ def main() -> int:
     parser.add_argument("--artifacts-dir", required=True)
     parser.add_argument("--repo", required=True, help="GitHub owner/name")
     parser.add_argument("--output", required=True)
+    parser.add_argument(
+        "--notes-file",
+        help=(
+            "Optional path to a Markdown file whose contents are embedded in "
+            "the manifest's `notes` field (rendered inside the Tauri auto-"
+            "updater dialog). Falls back to a link to the release page when "
+            "unset or unreadable."
+        ),
+    )
     args = parser.parse_args()
 
     version_clean = args.version.lstrip("v")
@@ -46,6 +55,19 @@ def main() -> int:
     release_url_base = (
         f"https://github.com/{args.repo}/releases/download/{args.version}"
     )
+    fallback_notes = (
+        f"See release notes at "
+        f"https://github.com/{args.repo}/releases/tag/{args.version}"
+    )
+    if args.notes_file:
+        notes_path = Path(args.notes_file)
+        try:
+            notes = notes_path.read_text(encoding="utf-8").strip() or fallback_notes
+        except OSError as exc:
+            print(f"[warn] failed to read {notes_path}: {exc}", file=sys.stderr)
+            notes = fallback_notes
+    else:
+        notes = fallback_notes
 
     platforms: dict[str, dict[str, str]] = {}
 
@@ -79,10 +101,7 @@ def main() -> int:
 
     manifest = {
         "version": version_clean,
-        "notes": (
-            f"See release notes at "
-            f"https://github.com/{args.repo}/releases/tag/{args.version}"
-        ),
+        "notes": notes,
         "pub_date": datetime.now(timezone.utc)
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),

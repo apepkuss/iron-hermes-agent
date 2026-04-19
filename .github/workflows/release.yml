@@ -203,6 +203,10 @@ jobs:
     environment: release
     steps:
       - uses: actions/checkout@v4
+        with:
+          # git-cliff needs the full history + tag graph to compute the
+          # commit range for this release.
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -220,12 +224,23 @@ jobs:
             -name "*.AppImage" \
           \) -exec mv {} . \;
 
+      - name: Generate release notes (git-cliff)
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          # --tag pins the "Unreleased" bucket to the current tag so the
+          # heading and the latest.json notes use the same version label.
+          args: --tag ${{ github.ref_name }} --latest --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
       - name: Generate update manifest
         run: |
           python3 .github/scripts/generate_update_manifest.py \
             --version "${GITHUB_REF_NAME}" \
             --artifacts-dir artifacts \
             --repo "${GITHUB_REPOSITORY}" \
+            --notes-file RELEASE_NOTES.md \
             --output artifacts/latest.json
           cat artifacts/latest.json
 
@@ -238,7 +253,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          # Use the curated notes instead of GitHub's auto-summary so the
+          # release page, the `latest.json.notes`, and the desktop auto-
+          # updater dialog all show the same conventional-commits digest.
+          body_path: RELEASE_NOTES.md
           files: |
             artifacts/*.tar.gz
             artifacts/*.tar.gz.sig
