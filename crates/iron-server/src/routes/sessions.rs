@@ -18,9 +18,10 @@ pub struct ListQuery {
     pub limit: Option<u32>,
     pub offset: Option<u32>,
     /// Optional full-text query. When set, the endpoint switches to search
-    /// mode: it runs SQLite FTS over message contents and returns the set
-    /// of matching sessions (deduped, ranked by BM25). `offset` is ignored
-    /// in search mode.
+    /// mode: it runs SQLite FTS over message contents and returns one entry
+    /// per matched message (not per session), ranked by BM25, so the UI can
+    /// render a VS Code-style flat list and jump straight to the matched
+    /// message. `offset` is ignored in search mode.
     pub q: Option<String>,
 }
 
@@ -72,10 +73,12 @@ pub async fn list_sessions(
         }
     };
 
-    // Search mode: FTS over message content, collect unique session ids in
-    // rank order, then resolve each to a Session row for display metadata.
+    // Search mode: FTS over message content. Every matching message becomes
+    // its own entry so the UI can render a VS Code-style flat list and jump
+    // directly to the matched message. Session display metadata is cached
+    // per session_id to avoid redundant lookups.
     if let Some(q) = search_query {
-        let matches = match store.search_messages(q, None, None, limit * 4) {
+        let matches = match store.search_messages(q, None, None, limit) {
             Ok(v) => v,
             Err(e) => {
                 return (
@@ -85,35 +88,38 @@ pub async fn list_sessions(
             }
         };
 
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut session_meta: std::collections::HashMap<String, (String, String)> =
+            std::collections::HashMap::new();
         let mut items = Vec::new();
         for m in matches.into_iter() {
-            if !seen.insert(m.session_id.clone()) {
-                continue;
-            }
-            match store.get_session(&m.session_id) {
-                Ok(Some(s)) => {
-                    let display_title = build_display_title(&store, &s.id, &s.title);
-                    items.push(json!({
-                        "id": s.id,
-                        "title": s.title,
-                        "display_title": display_title,
-                        "started_at": s.started_at,
-                        "ended_at": s.ended_at,
-                        "message_count": s.message_count,
-                    }));
+            let entry = session_meta.entry(m.session_id.clone());
+            let (title, started_at) = match entry {
+                std::collections::hash_map::Entry::Occupied(o) => o.get().clone(),
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    match store.get_session(&m.session_id) {
+                        Ok(Some(s)) => {
+                            let display_title = build_display_title(&store, &s.id, &s.title);
+                            v.insert((display_title.clone(), s.started_at.clone()));
+                            (display_title, s.started_at)
+                        }
+                        _ => continue,
+                    }
                 }
-                _ => continue,
-            }
-            if items.len() >= limit as usize {
-                break;
-            }
+            };
+            items.push(json!({
+                "session_id": m.session_id,
+                "session_title": title,
+                "session_started_at": started_at,
+                "message_id": m.message_id,
+                "role": m.role,
+                "content": m.content,
+            }));
         }
 
         return (
             StatusCode::OK,
             Json(json!({
-                "items": items,
+                "matches": items,
                 "has_more": false,
                 "limit": limit,
                 "offset": 0,

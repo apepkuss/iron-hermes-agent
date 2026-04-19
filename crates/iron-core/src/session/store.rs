@@ -313,7 +313,7 @@ impl SessionStore {
                 .join(",");
             (
                 format!(
-                    "SELECT m.session_id, m.content, m.role, rank \
+                    "SELECT m.session_id, m.content, m.role, rank, m.id \
                      FROM messages_fts \
                      JOIN messages m ON messages_fts.rowid = m.id \
                      WHERE messages_fts MATCH simple_query(?1) \
@@ -327,7 +327,7 @@ impl SessionStore {
         } else {
             (
                 format!(
-                    "SELECT m.session_id, m.content, m.role, rank \
+                    "SELECT m.session_id, m.content, m.role, rank, m.id \
                      FROM messages_fts \
                      JOIN messages m ON messages_fts.rowid = m.id \
                      WHERE messages_fts MATCH simple_query(?1) \
@@ -368,6 +368,7 @@ impl SessionStore {
                 content: row.get(1).unwrap_or_default(),
                 role: row.get(2).unwrap_or_default(),
                 rank: row.get(3).unwrap_or(0.0),
+                message_id: row.get(4).unwrap_or(0),
             });
         }
         Ok(results)

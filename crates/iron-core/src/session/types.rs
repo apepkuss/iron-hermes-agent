@@ -54,6 +54,9 @@ pub struct SessionMessage {
 #[derive(Debug, Clone)]
 pub struct MessageMatch {
     pub session_id: String,
+    /// Row id of the matched message (stable per database, used to anchor
+    /// the browser UI when jumping back to a search hit).
+    pub message_id: i64,
     pub content: String,
     pub role: String,
     pub rank: f64,
