@@ -224,15 +224,56 @@ jobs:
             -name "*.AppImage" \
           \) -exec mv {} . \;
 
-      - name: Generate release notes (git-cliff)
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          # --tag pins the "Unreleased" bucket to the current tag so the
-          # heading and the latest.json notes use the same version label.
-          args: --tag ${{ github.ref_name }} --latest --strip header
-        env:
-          OUTPUT: RELEASE_NOTES.md
+      - name: Generate release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -1 || echo "")
+
+          # Only three commit types end up in the release body (and in the
+          # Tauri auto-updater dialog): feat, fix, refactor. Everything else
+          # (ci/chore/docs/test/build/style/perf/unknown) is dropped so the
+          # notes stay focused on user-visible changes.
+          #
+          # Scope is preserved: `feat(webui): redesign` becomes
+          # `- **webui:** redesign`; an unscoped `feat: ...` becomes
+          # `- ...` without a leading scope marker.
+          format_bullets() {
+            local type="$1"
+            grep -E "^${type}(\([^)]*\))?!?:" "${COMMITS_FILE}" \
+              | sed -E \
+                  -e 's/^[a-z]+\(([^)]+)\)!?: */- **\1:** /' \
+                  -e 's/^[a-z]+!?: */- /' \
+              || true
+          }
+
+          if [ -z "${PREV_TAG}" ]; then
+            echo "## Initial Release" > RELEASE_NOTES.md
+          else
+            echo "## Changes since ${PREV_TAG}" > RELEASE_NOTES.md
+
+            COMMITS_FILE=$(mktemp)
+            git log "${PREV_TAG}..${TAG}" --pretty=format:"%s" > "${COMMITS_FILE}"
+
+            FEATURES=$(format_bullets "feat")
+            FIXES=$(format_bullets "fix")
+            REFACTORS=$(format_bullets "refactor")
+
+            if [ -n "${FEATURES}" ]; then
+              { echo ""; echo "### Features"; echo ""; echo "${FEATURES}"; } >> RELEASE_NOTES.md
+            fi
+            if [ -n "${FIXES}" ]; then
+              { echo ""; echo "### Bug Fixes"; echo ""; echo "${FIXES}"; } >> RELEASE_NOTES.md
+            fi
+            if [ -n "${REFACTORS}" ]; then
+              { echo ""; echo "### Refactors"; echo ""; echo "${REFACTORS}"; } >> RELEASE_NOTES.md
+            fi
+
+            rm -f "${COMMITS_FILE}"
+          fi
+          echo "-- RELEASE_NOTES.md --"
+          cat RELEASE_NOTES.md
 
       - name: Generate update manifest
         run: |
