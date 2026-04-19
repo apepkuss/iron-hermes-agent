@@ -251,6 +251,57 @@ button, input, select, textarea {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  position: relative;
+}
+
+/* Language popover */
+.lang-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 10px;
+  min-width: 140px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  z-index: 60;
+}
+.lang-popover.open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.lang-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.12s ease;
+}
+.lang-option:hover {
+  background: var(--bg-card-hover);
+}
+.lang-option .check {
+  color: var(--text-muted);
+  opacity: 0;
+  font-size: 12px;
+}
+.lang-option.active .check {
+  opacity: 1;
+  color: var(--text-primary);
 }
 
 .icon-btn {
@@ -1312,35 +1363,42 @@ button, input, select, textarea {
     </div>
 
     <nav class="sidebar-nav">
-      <button class="nav-item active" id="newChatBtn" title="New Chat">
+      <button class="nav-item active" id="newChatBtn" data-i18n-title="sidebar.newChat" title="New Chat">
         <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        <span>New Chat</span>
+        <span data-i18n="sidebar.newChat">New Chat</span>
       </button>
     </nav>
 
     <div class="sidebar-footer">
-      <button class="icon-btn" id="themeToggleBtn" title="Toggle theme">
+      <button class="icon-btn" id="themeToggleBtn" data-i18n-title="btn.theme" title="Toggle theme">
         <svg class="theme-icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
         <svg class="theme-icon-dark" viewBox="0 0 24 24" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button class="icon-btn" id="settingsBtn" title="Settings">
+      <button class="icon-btn" id="langToggleBtn" data-i18n-title="btn.language" title="Language">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" data-i18n-title="btn.settings" title="Settings">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <span class="version" id="appVersionSidebar"></span>
+      <div class="lang-popover" id="langPopover">
+        <button class="lang-option" data-locale="en">English<span class="check">✓</span></button>
+        <button class="lang-option" data-locale="zh">中文<span class="check">✓</span></button>
+      </div>
     </div>
   </aside>
 
   <!-- ── Main area ── -->
   <main class="app-main">
     <div class="main-header">
-      <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" title="Menu">
+      <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" data-i18n-title="btn.menu" title="Menu">
         <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
       </button>
-      <span class="main-header-title">Chat</span>
+      <span class="main-header-title" data-i18n="header.title">Chat</span>
       <div class="model-selector">
-        <label for="modelSelect">Model</label>
-        <select id="modelSelect"><option value="">loading...</option></select>
-        <button class="refresh-btn" id="refreshModelsBtn" title="Refresh models">
+        <label for="modelSelect" data-i18n="header.model">Model</label>
+        <select id="modelSelect"><option value="" data-i18n="model.loading">loading...</option></select>
+        <button class="refresh-btn" id="refreshModelsBtn" data-i18n-title="btn.refresh" title="Refresh models">
           <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
         </button>
       </div>
@@ -1353,15 +1411,15 @@ button, input, select, textarea {
           <div class="geo-square"></div>
           <div class="geo-diamond"></div>
         </div>
-        <div class="empty-title">Iron Hermes</div>
-        <div class="empty-tagline">Intelligent Agent</div>
+        <div class="empty-title" data-i18n="empty.title">Iron Hermes</div>
+        <div class="empty-tagline" data-i18n="empty.tagline">Intelligent Agent</div>
       </div>
     </div>
 
     <div class="input-area">
       <div class="input-row">
-        <textarea id="msgInput" placeholder="Message Iron Hermes..." rows="1"></textarea>
-        <button class="send-btn" id="sendBtn" title="Send">
+        <textarea id="msgInput" data-i18n-placeholder="input.placeholder" placeholder="Message Iron Hermes..." rows="1"></textarea>
+        <button class="send-btn" id="sendBtn" data-i18n-title="btn.send" title="Send">
           <svg id="sendIcon" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </button>
       </div>
@@ -1375,8 +1433,8 @@ button, input, select, textarea {
 <!-- ── Settings panel ── -->
 <div class="settings-panel" id="settingsPanel">
   <div class="settings-panel-header">
-    <span class="settings-panel-title">Settings</span>
-    <button class="settings-close-btn" id="settingsCloseBtn" title="Close">
+    <span class="settings-panel-title" data-i18n="settings.title">Settings</span>
+    <button class="settings-close-btn" id="settingsCloseBtn" data-i18n-title="btn.close" title="Close">
       <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
   </div>
@@ -1384,17 +1442,17 @@ button, input, select, textarea {
   <div class="settings-body">
     <!-- Provider URL -->
     <div class="settings-field">
-      <label class="settings-label" for="providerUrl">Provider URL</label>
+      <label class="settings-label" for="providerUrl" data-i18n="settings.providerUrl">Provider URL</label>
       <input class="settings-input" id="providerUrl" type="text"
         placeholder="http://localhost:9068/v1" value="http://localhost:9068/v1">
     </div>
 
     <!-- API Key -->
     <div class="settings-field">
-      <label class="settings-label" for="apiKeyInput">API Key</label>
+      <label class="settings-label" for="apiKeyInput" data-i18n="settings.apiKey">API Key</label>
       <div class="api-key-row">
         <input class="settings-input" id="apiKeyInput" type="password" placeholder="">
-        <button class="api-key-copy-btn" id="apiKeyCopyBtn" title="Copy">
+        <button class="api-key-copy-btn" id="apiKeyCopyBtn" data-i18n-title="btn.copy" title="Copy">
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         </button>
       </div>
@@ -1402,53 +1460,53 @@ button, input, select, textarea {
 
     <!-- Auxiliary Model -->
     <div class="settings-field">
-      <label class="settings-label" for="auxModelSelect">Auxiliary Model</label>
+      <label class="settings-label" for="auxModelSelect" data-i18n="settings.auxModel">Auxiliary Model</label>
       <select class="settings-select" id="auxModelSelect">
-        <option value="">None</option>
+        <option value="" data-i18n="settings.auxModelNone">None</option>
       </select>
-      <span class="settings-hint">No auxiliary model = degraded compression</span>
+      <span class="settings-hint" data-i18n="settings.auxModelHint">No auxiliary model = degraded compression</span>
     </div>
 
     <!-- Compression Threshold -->
     <div class="settings-field">
-      <label class="settings-label">Compression Threshold</label>
+      <label class="settings-label" data-i18n="settings.compression">Compression Threshold</label>
       <div class="slider-row">
         <input class="settings-slider" id="compressionSlider" type="range" min="50" max="95" step="5" value="65">
         <span class="slider-value" id="sliderValueDisplay">65%</span>
       </div>
       <div class="slider-ticks">
-        <span class="slider-tick">50% Conservative</span>
-        <span class="slider-tick">65% Default</span>
-        <span class="slider-tick">80% Aggressive</span>
+        <span class="slider-tick" data-i18n="settings.compressionConservative">50% Conservative</span>
+        <span class="slider-tick" data-i18n="settings.compressionDefault">65% Default</span>
+        <span class="slider-tick" data-i18n="settings.compressionAggressive">80% Aggressive</span>
       </div>
     </div>
 
     <!-- Context Length -->
     <div class="settings-field">
-      <label class="settings-label" for="contextLength">Context Length</label>
-      <input class="settings-input" id="contextLength" type="number" placeholder="auto" min="1">
-      <span class="settings-hint">Leave empty for auto-detection</span>
+      <label class="settings-label" for="contextLength" data-i18n="settings.contextLength">Context Length</label>
+      <input class="settings-input" id="contextLength" type="number" data-i18n-placeholder="settings.contextLengthPlaceholder" placeholder="auto" min="1">
+      <span class="settings-hint" data-i18n="settings.contextLengthHint">Leave empty for auto-detection</span>
     </div>
 
     <!-- Toolsets -->
     <div class="settings-group">
-      <label class="settings-label">Toolsets</label>
+      <label class="settings-label" data-i18n="settings.toolsets">Toolsets</label>
       <div id="toolsetToggles" class="toolset-toggles"></div>
     </div>
 
     <!-- About & Updates -->
     <div class="settings-group" id="updatesGroup" style="display: none;">
-      <label class="settings-label">About</label>
+      <label class="settings-label" data-i18n="settings.about">About</label>
       <div class="update-row">
         <span class="update-version" id="appVersion">v—</span>
-        <button class="check-updates-btn" id="checkUpdatesBtn">Check for Updates</button>
+        <button class="check-updates-btn" id="checkUpdatesBtn" data-i18n="settings.checkUpdates">Check for Updates</button>
       </div>
       <div class="update-status" id="updateStatus"></div>
     </div>
   </div>
 
   <div class="settings-footer">
-    <button class="settings-save-btn" id="settingsSaveBtn">Save</button>
+    <button class="settings-save-btn" id="settingsSaveBtn" data-i18n="settings.save">Save</button>
     <div class="settings-status" id="settingsStatus"></div>
   </div>
 </div>
@@ -1456,30 +1514,196 @@ button, input, select, textarea {
 <!-- ── Update modal ── -->
 <div class="update-modal-backdrop" id="updateModalBackdrop">
   <div class="update-modal" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
-    <div class="update-modal-header" id="updateModalTitle">Update Available</div>
+    <div class="update-modal-header" id="updateModalTitle" data-i18n="updater.title">Update Available</div>
     <div class="update-modal-body">
       <div class="update-version-line">
-        Current: <span id="updateCurrentVersion">—</span>
-        → New: <span class="new" id="updateNewVersion">—</span>
+        <span data-i18n="updater.current">Current</span>: <span id="updateCurrentVersion">—</span>
+        → <span data-i18n="updater.new">New</span>: <span class="new" id="updateNewVersion">—</span>
       </div>
-      <div class="update-notes-label">Release Notes</div>
+      <div class="update-notes-label" data-i18n="updater.releaseNotes">Release Notes</div>
       <div class="update-notes" id="updateNotes">—</div>
       <div class="update-progress-container" id="updateProgressContainer">
         <div class="update-progress-track">
           <div class="update-progress-fill" id="updateProgressFill"></div>
         </div>
-        <div class="update-progress-text" id="updateProgressText">Preparing download…</div>
+        <div class="update-progress-text" id="updateProgressText" data-i18n="updater.preparing">Preparing download…</div>
       </div>
     </div>
     <div class="update-modal-footer">
-      <button class="update-btn" id="updateLaterBtn">Later</button>
-      <button class="update-btn primary" id="updateInstallBtn">Install &amp; Restart</button>
+      <button class="update-btn" id="updateLaterBtn" data-i18n="updater.later">Later</button>
+      <button class="update-btn primary" id="updateInstallBtn" data-i18n="updater.install">Install &amp; Restart</button>
     </div>
   </div>
 </div>
 
 <script>
 (function() {
+  // ── i18n ──
+  const I18N = {
+    en: {
+      'sidebar.newChat': 'New Chat',
+      'header.title': 'Chat',
+      'header.model': 'Model',
+      'input.placeholder': 'Message Iron Hermes...',
+      'empty.title': 'Iron Hermes',
+      'empty.tagline': 'Intelligent Agent',
+      'settings.title': 'Settings',
+      'settings.providerUrl': 'Provider URL',
+      'settings.apiKey': 'API Key',
+      'settings.auxModel': 'Auxiliary Model',
+      'settings.auxModelNone': 'None',
+      'settings.auxModelHint': 'No auxiliary model = degraded compression',
+      'settings.compression': 'Compression Threshold',
+      'settings.compressionConservative': '50% Conservative',
+      'settings.compressionDefault': '65% Default',
+      'settings.compressionAggressive': '80% Aggressive',
+      'settings.contextLength': 'Context Length',
+      'settings.contextLengthPlaceholder': 'auto',
+      'settings.contextLengthHint': 'Leave empty for auto-detection',
+      'settings.toolsets': 'Toolsets',
+      'settings.about': 'About',
+      'settings.checkUpdates': 'Check for Updates',
+      'settings.save': 'Save',
+      'settings.saved': 'Saved',
+      'settings.errorPrefix': 'Error: {msg}',
+      'updater.title': 'Update Available',
+      'updater.current': 'Current',
+      'updater.new': 'New',
+      'updater.releaseNotes': 'Release Notes',
+      'updater.noNotes': '(no release notes)',
+      'updater.later': 'Later',
+      'updater.install': 'Install & Restart',
+      'updater.preparing': 'Preparing download…',
+      'updater.checking': 'Checking for updates…',
+      'updater.upToDate': 'You are on the latest version.',
+      'updater.available': 'New version v{v} available.',
+      'updater.unavailable': 'Updater unavailable on this platform.',
+      'updater.checkFailed': 'Check failed: {msg}',
+      'updater.failed': 'Update failed: {msg}',
+      'updater.downloaded': '{n} downloaded',
+      'chat.thinking': 'Thinking...',
+      'chat.calling': 'Calling {tool}...',
+      'chat.generating': 'Generating response...',
+      'chat.noResponse': 'No response received.',
+      'chat.stopped': 'Stopped.',
+      'chat.connectionError': 'Connection error: {msg}',
+      'chat.errorPrefix': 'Error: {msg}',
+      'btn.send': 'Send',
+      'btn.stop': 'Stop',
+      'btn.menu': 'Menu',
+      'btn.copy': 'Copy',
+      'btn.refresh': 'Refresh models',
+      'btn.close': 'Close',
+      'btn.theme': 'Toggle theme',
+      'btn.settings': 'Settings',
+      'btn.language': 'Language',
+      'model.loading': 'loading...',
+      'model.unavailable': 'unavailable',
+    },
+    zh: {
+      'sidebar.newChat': '新建会话',
+      'header.title': '对话',
+      'header.model': '模型',
+      'input.placeholder': '向 Iron Hermes 发消息...',
+      'empty.title': 'Iron Hermes',
+      'empty.tagline': '智能代理',
+      'settings.title': '设置',
+      'settings.providerUrl': 'Provider URL',
+      'settings.apiKey': 'API Key',
+      'settings.auxModel': '辅助模型',
+      'settings.auxModelNone': '无',
+      'settings.auxModelHint': '未配置辅助模型会降级压缩质量',
+      'settings.compression': '压缩阈值',
+      'settings.compressionConservative': '50% 保守',
+      'settings.compressionDefault': '65% 默认',
+      'settings.compressionAggressive': '80% 激进',
+      'settings.contextLength': '上下文长度',
+      'settings.contextLengthPlaceholder': '自动',
+      'settings.contextLengthHint': '留空为自动检测',
+      'settings.toolsets': '工具集',
+      'settings.about': '关于',
+      'settings.checkUpdates': '检查更新',
+      'settings.save': '保存',
+      'settings.saved': '已保存',
+      'settings.errorPrefix': '错误：{msg}',
+      'updater.title': '发现新版本',
+      'updater.current': '当前',
+      'updater.new': '新版',
+      'updater.releaseNotes': '更新说明',
+      'updater.noNotes': '（无更新说明）',
+      'updater.later': '稍后',
+      'updater.install': '安装并重启',
+      'updater.preparing': '准备下载…',
+      'updater.checking': '正在检查更新…',
+      'updater.upToDate': '已是最新版本。',
+      'updater.available': '发现新版本 v{v}。',
+      'updater.unavailable': '当前平台不支持更新。',
+      'updater.checkFailed': '检查失败：{msg}',
+      'updater.failed': '更新失败：{msg}',
+      'updater.downloaded': '已下载 {n}',
+      'chat.thinking': '思考中...',
+      'chat.calling': '正在调用 {tool}...',
+      'chat.generating': '生成回复中...',
+      'chat.noResponse': '未收到回复。',
+      'chat.stopped': '已停止。',
+      'chat.connectionError': '连接错误：{msg}',
+      'chat.errorPrefix': '错误：{msg}',
+      'btn.send': '发送',
+      'btn.stop': '停止',
+      'btn.menu': '菜单',
+      'btn.copy': '复制',
+      'btn.refresh': '刷新模型',
+      'btn.close': '关闭',
+      'btn.theme': '切换主题',
+      'btn.settings': '设置',
+      'btn.language': '语言',
+      'model.loading': '加载中...',
+      'model.unavailable': '不可用',
+    }
+  };
+
+  let currentLocale = (function() {
+    try {
+      var saved = localStorage.getItem('iron_locale');
+      if (saved === 'en' || saved === 'zh') return saved;
+    } catch(e) {}
+    var nav = (navigator.language || '').toLowerCase();
+    return nav.indexOf('zh') === 0 ? 'zh' : 'en';
+  })();
+
+  function t(key, params) {
+    var dict = I18N[currentLocale] || I18N.en;
+    var s = (dict[key] !== undefined) ? dict[key] : (I18N.en[key] !== undefined ? I18N.en[key] : key);
+    if (params) {
+      Object.keys(params).forEach(function(k) {
+        s = s.replace('{' + k + '}', params[k]);
+      });
+    }
+    return s;
+  }
+
+  function applyI18n(root) {
+    root = root || document;
+    root.querySelectorAll('[data-i18n]').forEach(function(el) {
+      el.textContent = t(el.getAttribute('data-i18n'));
+    });
+    root.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-placeholder')));
+    });
+    root.querySelectorAll('[data-i18n-title]').forEach(function(el) {
+      el.setAttribute('title', t(el.getAttribute('data-i18n-title')));
+    });
+  }
+
+  function setLocale(loc) {
+    if (!I18N[loc]) return;
+    currentLocale = loc;
+    try { localStorage.setItem('iron_locale', loc); } catch(e) {}
+    document.documentElement.setAttribute('lang', loc === 'zh' ? 'zh-CN' : 'en');
+    applyI18n();
+    syncLangPopover();
+  }
+
   const chatArea = document.getElementById('chatArea');
   const emptyState = document.getElementById('emptyState');
   const msgInput = document.getElementById('msgInput');
@@ -1495,6 +1719,31 @@ button, input, select, textarea {
       appSidebar.classList.toggle('open');
     });
   }
+
+  // Language popover
+  const langToggleBtn = document.getElementById('langToggleBtn');
+  const langPopover = document.getElementById('langPopover');
+  function syncLangPopover() {
+    langPopover.querySelectorAll('.lang-option').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.locale === currentLocale);
+    });
+  }
+  langToggleBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    langPopover.classList.toggle('open');
+  });
+  langPopover.querySelectorAll('.lang-option').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setLocale(btn.dataset.locale);
+      langPopover.classList.remove('open');
+    });
+  });
+  document.addEventListener('click', function(e) {
+    if (!langPopover.contains(e.target) && e.target !== langToggleBtn && !langToggleBtn.contains(e.target)) {
+      langPopover.classList.remove('open');
+    }
+  });
 
   // Theme toggle
   const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -1561,7 +1810,7 @@ button, input, select, textarea {
     const current = modelSelect.value;
     modelSelect.innerHTML = '';
     if (models.length === 0) {
-      modelSelect.innerHTML = '<option value="">unavailable</option>';
+      modelSelect.innerHTML = '<option value="">' + escapeHtml(t('model.unavailable')) + '</option>';
       return;
     }
     models.forEach(function(id) {
@@ -1577,7 +1826,7 @@ button, input, select, textarea {
 
   async function populateAuxModelSelect(models, selectedValue) {
     const current = selectedValue !== undefined ? selectedValue : auxModelSelect.value;
-    auxModelSelect.innerHTML = '<option value="">None</option>';
+    auxModelSelect.innerHTML = '<option value="">' + escapeHtml(t('settings.auxModelNone')) + '</option>';
     models.forEach(function(id) {
       const opt = document.createElement('option');
       opt.value = id;
@@ -1590,7 +1839,7 @@ button, input, select, textarea {
   }
 
   async function initModels() {
-    modelSelect.innerHTML = '<option value="">loading...</option>';
+    modelSelect.innerHTML = '<option value="">' + escapeHtml(t('model.loading')) + '</option>';
     const models = await loadModels(null);
     await populateMainModelSelect(models);
     await populateAuxModelSelect(models, undefined);
@@ -1755,14 +2004,14 @@ button, input, select, textarea {
         const errText = await resp.text();
         throw new Error(errText || resp.statusText);
       }
-      settingsStatus.textContent = 'Saved';
+      settingsStatus.textContent = t('settings.saved');
       settingsStatus.className = 'settings-status ok';
       setTimeout(function() {
         settingsStatus.textContent = '';
         settingsStatus.className = 'settings-status';
       }, 2000);
     } catch (e) {
-      settingsStatus.textContent = 'Error: ' + e.message;
+      settingsStatus.textContent = t('settings.errorPrefix', { msg: e.message });
       settingsStatus.className = 'settings-status err';
     } finally {
       settingsSaveBtn.disabled = false;
@@ -1871,7 +2120,7 @@ button, input, select, textarea {
         '<div class="loading-dot"></div>' +
         '<div class="loading-dot"></div>' +
         '<div class="loading-dot"></div>' +
-        '<span class="loading-text">Thinking...</span>' +
+        '<span class="loading-text">' + escapeHtml(t('chat.thinking')) + '</span>' +
         '</div>';
     } else if (role === 'user') {
       contentDiv.textContent = content;
@@ -1907,11 +2156,11 @@ button, input, select, textarea {
     msgInput.disabled = val;
     if (val) {
       sendIcon.innerHTML = '<rect x="6" y="6" width="12" height="12" rx="1" fill="currentColor" stroke="none"/>';
-      sendBtn.title = 'Stop';
+      sendBtn.title = t('btn.stop');
       sendBtn.disabled = false;
     } else {
       sendIcon.innerHTML = '<line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>';
-      sendBtn.title = 'Send';
+      sendBtn.title = t('btn.send');
       sendBtn.disabled = false;
       abortController = null;
       msgInput.focus();
@@ -1959,7 +2208,7 @@ button, input, select, textarea {
 
       if (!response.ok) {
         const err = await response.text();
-        loadingContent.innerHTML = '<p style="color:var(--error)">Error: ' + escapeHtml(err) + '</p>';
+        loadingContent.innerHTML = '<p style="color:var(--error)">' + escapeHtml(t('chat.errorPrefix', { msg: err })) + '</p>';
         setStreaming(false);
         return;
       }
@@ -2002,7 +2251,7 @@ button, input, select, textarea {
                 loadingContent.innerHTML =
                   '<div class="loading-indicator">' +
                   '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>' +
-                  '<span class="loading-text">Calling ' + escapeHtml(toolData.tool) + '...</span>' +
+                  '<span class="loading-text">' + escapeHtml(t('chat.calling', { tool: toolData.tool })) + '</span>' +
                   '</div>';
               }
               handleToolStarted(toolData);
@@ -2016,7 +2265,7 @@ button, input, select, textarea {
                 loadingContent.innerHTML =
                   '<div class="loading-indicator">' +
                   '<div class="loading-dot"></div><div class="loading-dot"></div><div class="loading-dot"></div>' +
-                  '<span class="loading-text">Generating response...</span>' +
+                  '<span class="loading-text">' + escapeHtml(t('chat.generating')) + '</span>' +
                   '</div>';
               }
             } catch(e) {}
@@ -2048,7 +2297,7 @@ button, input, select, textarea {
         renderLatex(loadingContent);
         messages.push({ role: 'assistant', content: fullText });
       } else {
-        loadingContent.innerHTML = '<p style="color:var(--text-muted)">No response received.</p>';
+        loadingContent.innerHTML = '<p style="color:var(--text-muted)">' + escapeHtml(t('chat.noResponse')) + '</p>';
       }
 
     } catch (err) {
@@ -2058,10 +2307,10 @@ button, input, select, textarea {
           renderLatex(loadingContent);
           messages.push({ role: 'assistant', content: fullText });
         } else {
-          loadingContent.innerHTML = '<p style="color:var(--text-muted)">Stopped.</p>';
+          loadingContent.innerHTML = '<p style="color:var(--text-muted)">' + escapeHtml(t('chat.stopped')) + '</p>';
         }
       } else {
-        loadingContent.innerHTML = '<p style="color:var(--error)">Connection error: ' + escapeHtml(err.message) + '</p>';
+        loadingContent.innerHTML = '<p style="color:var(--error)">' + escapeHtml(t('chat.connectionError', { msg: err.message })) + '</p>';
       }
     }
 
@@ -2216,10 +2465,10 @@ button, input, select, textarea {
     function openModal(info) {
       currentEl.textContent = 'v' + info.current_version;
       newEl.textContent = 'v' + info.version;
-      notesEl.textContent = info.notes && info.notes.trim() ? info.notes : '(no release notes)';
+      notesEl.textContent = info.notes && info.notes.trim() ? info.notes : t('updater.noNotes');
       progContainer.classList.remove('active');
       progFill.style.width = '0%';
-      progText.textContent = 'Preparing download…';
+      progText.textContent = t('updater.preparing');
       installBtn.disabled = false;
       laterBtn.disabled = false;
       backdrop.classList.add('open');
@@ -2242,8 +2491,8 @@ button, input, select, textarea {
         await invoke('install_update');
       } catch (e) {
         var msg = (e && e.toString) ? e.toString() : String(e);
-        progText.textContent = 'Update failed: ' + msg;
-        setStatus('Update failed: ' + msg, 'error');
+        progText.textContent = t('updater.failed', { msg: msg });
+        setStatus(t('updater.failed', { msg: msg }), 'error');
         installBtn.disabled = false;
         laterBtn.disabled = false;
       }
@@ -2251,23 +2500,23 @@ button, input, select, textarea {
 
     checkBtn.addEventListener('click', async function() {
       checkBtn.disabled = true;
-      setStatus('Checking for updates…', 'info');
+      setStatus(t('updater.checking'), 'info');
       try {
         var avail = await invoke('get_updater_availability');
         if (!avail.available) {
-          setStatus(avail.reason || 'Updater unavailable on this platform.', 'info');
+          setStatus(avail.reason || t('updater.unavailable'), 'info');
           return;
         }
         var info = await invoke('check_for_update');
         if (info) {
-          setStatus('New version v' + info.version + ' available.', 'success');
+          setStatus(t('updater.available', { v: info.version }), 'success');
           openModal(info);
         } else {
-          setStatus('You are on the latest version.', 'success');
+          setStatus(t('updater.upToDate'), 'success');
         }
       } catch (e) {
         var msg = (e && e.toString) ? e.toString() : String(e);
-        setStatus('Check failed: ' + msg, 'error');
+        setStatus(t('updater.checkFailed', { msg: msg }), 'error');
       } finally {
         checkBtn.disabled = false;
       }
@@ -2281,10 +2530,15 @@ button, input, select, textarea {
         progFill.style.width = pct + '%';
         progText.textContent = pct + '% (' + fmtBytes(p.downloaded) + ' / ' + fmtBytes(p.total) + ')';
       } else {
-        progText.textContent = fmtBytes(p.downloaded) + ' downloaded';
+        progText.textContent = t('updater.downloaded', { n: fmtBytes(p.downloaded) });
       }
     });
   })();
+
+  // Initial i18n apply
+  document.documentElement.setAttribute('lang', currentLocale === 'zh' ? 'zh-CN' : 'en');
+  applyI18n();
+  syncLangPopover();
 
   msgInput.focus();
 })();
