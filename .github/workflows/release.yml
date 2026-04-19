@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run_version:
+        description: "Version tag to stamp into Cargo.toml for this dry run (e.g. v0.0.2-rc1). The publish job is skipped when running manually."
+        required: true
+        default: "v0.0.0-manual"
 
 env:
   CARGO_TERM_COLOR: always
@@ -35,14 +41,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve release version
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.dry_run_version || github.ref_name }}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "VERSION_CLEAN=${VERSION#v}" >> "$GITHUB_ENV"
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Set workspace version from tag
+      - name: Set workspace version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i.bak -E "s/^version = \".*\"$/version = \"${VERSION}\"/" Cargo.toml
+          sed -i.bak -E "s/^version = \".*\"$/version = \"${VERSION_CLEAN}\"/" Cargo.toml
           rm Cargo.toml.bak
           grep "^version" Cargo.toml
 
@@ -52,7 +64,6 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME}"
           ARCHIVE_NAME="${BINARY_NAME}-${VERSION}-${{ matrix.target }}"
           ARCHIVE_DIR="staging/${ARCHIVE_NAME}"
 
@@ -100,6 +111,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve release version
+        shell: bash
+        run: |
+          VERSION="${{ github.event.inputs.dry_run_version || github.ref_name }}"
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "VERSION_CLEAN=${VERSION#v}" >> "$GITHUB_ENV"
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -116,11 +134,10 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
 
-      - name: Set workspace version from tag
+      - name: Set workspace version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          sed -i.bak -E "s/^version = \".*\"$/version = \"${VERSION}\"/" Cargo.toml
+          sed -i.bak -E "s/^version = \".*\"$/version = \"${VERSION_CLEAN}\"/" Cargo.toml
           rm Cargo.toml.bak
           grep "^version" Cargo.toml
 
@@ -131,31 +148,43 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: cargo tauri build --target ${{ matrix.target }}
 
+      - name: List bundle outputs (diagnostic)
+        shell: bash
+        run: |
+          echo "== bundle tree =="
+          find "target/${{ matrix.target }}/release/bundle" -maxdepth 3 -type f | sort
+
       - name: Collect desktop artifacts
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          set -euo pipefail
           DESKTOP_DIR="desktop-staging"
           mkdir -p "${DESKTOP_DIR}"
 
           if [[ "${{ runner.os }}" == "macOS" ]]; then
             cp target/${{ matrix.target }}/release/bundle/dmg/*.dmg \
               "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.dmg"
-            # Updater archive + signature
+            # Updater archive + signature — must exist, fail loudly if missing.
             cp target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz \
               "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.app.tar.gz"
             cp target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig \
               "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.app.tar.gz.sig"
           else
+            # .deb is best-effort — not every distro layout produces one on every
+            # runner, and the AppImage alone is enough for user-facing installs.
             cp target/${{ matrix.target }}/release/bundle/deb/*.deb \
               "${DESKTOP_DIR}/iron-hermes-desktop-${VERSION}-${{ matrix.target }}.deb" 2>/dev/null || true
+            # AppImage itself — must exist.
             cp target/${{ matrix.target }}/release/bundle/appimage/*.AppImage \
-              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage" 2>/dev/null || true
-            # Updater archive + signature (AppImage only)
+              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage"
+            # Updater archive + signature (AppImage) — must exist, fail loudly
+            # if missing so the Linux updater channel stays usable. Previously
+            # these copies were swallowed with `|| true`, which silently left
+            # Linux users without an auto-update path.
             cp target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz \
-              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage.tar.gz" 2>/dev/null || true
+              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage.tar.gz"
             cp target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz.sig \
-              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage.tar.gz.sig" 2>/dev/null || true
+              "${DESKTOP_DIR}/Iron-Hermes-${VERSION}-${{ matrix.target }}.AppImage.tar.gz.sig"
           fi
 
       - name: Upload desktop artifact
@@ -168,6 +197,8 @@ jobs:
   publish:
     name: Publish Release
     needs: [build-release, build-desktop]
+    # Skip publishing when the workflow is triggered manually (dry run).
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: release
     steps:
