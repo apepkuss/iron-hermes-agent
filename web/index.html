@@ -131,16 +131,163 @@ button, input, select, textarea {
   overflow: hidden;
 }
 
-/* ── Sidebar ── */
-.app-sidebar {
-  width: 240px;
+/* ── Global navigation ── */
+.global-sidebar {
+  width: 72px;
   flex-shrink: 0;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  align-items: center;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+  z-index: 55;
+}
+
+.global-logo {
+  height: 62px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.global-logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+}
+
+.global-nav {
+  flex: 1;
+  width: 100%;
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.global-nav-item {
+  width: 100%;
+  min-height: 52px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.global-nav-item:hover,
+.global-nav-item.active {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.global-nav-item svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.global-footer {
+  width: 100%;
+  padding: 10px 8px;
+  border-top: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.global-footer .version {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-size: 9px;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ── Session sidebar ── */
+.app-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
   transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
   z-index: 50;
+}
+.app-sidebar.collapsed {
+  width: 0;
+  border-left: none;
+  overflow: hidden;
+  transform: translateX(100%);
+}
+
+.app-main.show-tasks + .app-sidebar,
+.app-main.show-settings + .app-sidebar {
+  display: none;
+}
+
+.session-sidebar-toggle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 28px;
+  height: 74px;
+  border: 1px solid var(--border-color);
+  border-right: none;
+  border-radius: 12px 0 0 12px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: right 0.25s ease, color 0.15s ease, background 0.15s ease;
+}
+.session-sidebar-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+.session-sidebar-toggle svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+.session-sidebar-toggle.expanded {
+  right: 280px;
+}
+.session-sidebar-toggle.expanded svg {
+  transform: rotate(180deg);
+}
+.app-main.show-tasks .session-sidebar-toggle,
+.app-main.show-settings .session-sidebar-toggle {
+  display: none;
 }
 
 .sidebar-logo {
@@ -443,6 +590,12 @@ button, input, select, textarea {
   stroke-linejoin: round;
 }
 
+.sidebar-divider {
+  height: 1px;
+  margin: 8px 2px 2px;
+  background: var(--border-light);
+}
+
 .nav-group-label {
   padding: 14px 12px 6px;
   font-size: 10px;
@@ -452,21 +605,11 @@ button, input, select, textarea {
   color: var(--text-muted);
 }
 
-.sidebar-footer {
-  padding: 10px;
-  border-top: 1px solid var(--border-light);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  position: relative;
-}
-
 /* Language popover */
 .lang-popover {
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 10px;
+  left: 8px;
   min-width: 140px;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -547,15 +690,6 @@ button, input, select, textarea {
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.sidebar-footer .version {
-  margin-left: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
-  font-size: 10px;
-  color: var(--text-muted);
-  padding-right: 4px;
-  letter-spacing: 0.04em;
 }
 
 /* ── Main area ── */
@@ -677,6 +811,76 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.app-main.show-tasks .model-selector,
+.app-main.show-settings .model-selector,
+.app-main.show-tasks .chat-area,
+.app-main.show-settings .chat-area,
+.app-main.show-tasks .input-area,
+.app-main.show-settings .input-area {
+  display: none;
+}
+
+.tasks-page,
+.settings-page {
+  display: none;
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(var(--warning-rgb), 0.08), transparent 28%),
+    var(--bg-primary);
+}
+
+.app-main.show-tasks .tasks-page,
+.app-main.show-settings .settings-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-shell,
+.settings-shell {
+  width: min(1040px, 100%);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tasks-hero,
+.settings-hero {
+  border: 1px solid var(--border-light);
+  background: var(--bg-card);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.tasks-kicker,
+.settings-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tasks-title,
+.settings-page-title {
+  margin-top: 6px;
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tasks-subtitle,
+.settings-subtitle {
+  margin-top: 8px;
+  max-width: 680px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 /* ── Empty state ── */
@@ -1073,69 +1277,15 @@ button, input, select, textarea {
 .send-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .send-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* ── Settings panel (right drawer) ── */
-.settings-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: var(--overlay-bg);
-  z-index: 100;
-  backdrop-filter: blur(2px);
-}
-.settings-backdrop.open { display: block; }
-
 .settings-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 360px;
-  max-width: 90vw;
-  height: 100%;
   background: var(--bg-card);
-  border-left: 1px solid var(--border-color);
-  z-index: 101;
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
-  transform: translateX(100%);
-  transition: transform 0.25s ease;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-sm);
 }
-.settings-panel.open { transform: translateX(0); }
-
-.settings-panel-header {
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--border-light);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.settings-panel-title {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--text-primary);
-}
-
-.settings-close-btn {
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 6px;
-  transition: color 0.15s ease, background-color 0.15s ease;
-}
-.settings-close-btn:hover { color: var(--text-primary); background: var(--bg-secondary); }
-.settings-close-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5; }
 
 .settings-body {
   padding: 18px 20px;
@@ -1167,7 +1317,8 @@ button, input, select, textarea {
 }
 
 .settings-input,
-.settings-select {
+.settings-select,
+.settings-textarea {
   font-size: 13px;
   padding: 8px 11px;
   border: 1px solid var(--border-color);
@@ -1180,12 +1331,20 @@ button, input, select, textarea {
 }
 
 .settings-input:focus,
-.settings-select:focus {
+.settings-select:focus,
+.settings-textarea:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(0,0,0,0.04);
 }
 
 .settings-input::placeholder { color: var(--text-muted); }
+.settings-textarea {
+  min-height: 92px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.45;
+}
+.settings-textarea::placeholder { color: var(--text-muted); }
 
 .api-key-row {
   display: flex;
@@ -1343,6 +1502,118 @@ button, input, select, textarea {
   height: 16px;
   cursor: pointer;
   accent-color: var(--accent-primary);
+}
+
+/* Cron jobs */
+.cron-panel {
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  padding: 10px;
+}
+.cron-console-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cron-edit-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 10px;
+}
+.cron-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.cron-actions {
+  display: flex;
+  gap: 8px;
+}
+.cron-btn {
+  border: 1px solid var(--border-color);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 7px 9px;
+}
+.cron-btn.primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-on-accent);
+}
+.cron-btn.danger { color: var(--error); }
+.cron-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.cron-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cron-job {
+  border: 1px solid var(--border-light);
+  background: var(--bg-primary);
+  border-radius: 10px;
+  padding: 10px;
+}
+.cron-job-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cron-job-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.cron-job-status {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cron-job-status.enabled { color: var(--success); }
+.cron-job-status.running { color: var(--accent-primary); }
+.cron-meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.cron-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cron-run-list {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-light);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cron-run {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 7px;
+}
+.cron-run-output {
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: pre-wrap;
+  max-height: 110px;
+  overflow: auto;
 }
 
 /* About & Updates */
@@ -1512,15 +1783,22 @@ button, input, select, textarea {
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
+  .global-sidebar { width: 60px; }
+  .global-nav-item { min-height: 48px; font-size: 9px; }
   .app-sidebar {
     position: fixed;
-    top: 0; left: 0; bottom: 0;
-    transform: translateX(-100%);
+    top: 0; right: 0; bottom: 0;
+    transform: translateX(100%);
     box-shadow: var(--shadow-lg);
   }
   .app-sidebar.open { transform: translateX(0); }
   .mobile-sidebar-toggle { display: inline-flex; }
   .chat-area { padding: 16px 16px 8px; }
+  .tasks-page { padding: 16px; }
+  .settings-page { padding: 16px; }
+  .tasks-hero, .settings-hero { padding: 18px; border-radius: 14px; }
+  .tasks-title, .settings-page-title { font-size: 20px; }
+  .cron-console-top { flex-direction: column; }
   .input-area { padding: 10px 14px 16px; }
   .main-header { padding: 10px 14px; }
   .model-selector label { display: none; }
@@ -1535,42 +1813,32 @@ button, input, select, textarea {
 <body>
 <div class="app-shell">
 
-  <!-- ── Sidebar ── -->
-  <aside class="app-sidebar" id="appSidebar">
-    <div class="sidebar-logo">
-      <img class="sidebar-logo-mark" src="/assets/logo.png" alt="Iron Hermes">
-      <span class="sidebar-logo-text">Iron Hermes</span>
+  <!-- ── Global navigation ── -->
+  <aside class="global-sidebar" id="globalSidebar">
+    <div class="global-logo">
+      <img src="/assets/logo.png" alt="Iron Hermes">
     </div>
-
-    <nav class="sidebar-nav" id="sidebarNav">
-      <button class="nav-item" id="newChatBtn" data-i18n-title="sidebar.newChat" title="New Chat">
-        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-        <span data-i18n="sidebar.newChat">New Chat</span>
+    <nav class="global-nav">
+      <button class="global-nav-item active" id="chatNavBtn" data-i18n-title="sidebar.chat" title="Chat">
+        <svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+        <span data-i18n="sidebar.chat">Chat</span>
       </button>
-      <div class="history-search" id="historySearch">
-        <span class="history-search-icon">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </span>
-        <input id="historySearchInput" type="text" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search sessions...">
-        <button class="history-search-clear" id="historySearchClear" type="button" data-i18n-title="btn.close" title="Clear">
-          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
-      <div class="history-section" id="historySection"></div>
-      <div class="history-loader" id="historyLoader" style="display:none;" data-i18n="sidebar.loading">Loading...</div>
-      <div class="history-empty" id="historyEmpty" style="display:none;" data-i18n="sidebar.historyEmpty">No sessions yet</div>
+      <button class="global-nav-item" id="tasksNavBtn" data-i18n-title="sidebar.tasks" title="Tasks">
+        <svg viewBox="0 0 24 24"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>
+        <span data-i18n="sidebar.tasks">Tasks</span>
+      </button>
+      <button class="global-nav-item" id="settingsBtn" data-i18n-title="btn.settings" title="Settings">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span data-i18n="settings.title">Settings</span>
+      </button>
     </nav>
-
-    <div class="sidebar-footer">
+    <div class="global-footer">
       <button class="icon-btn" id="themeToggleBtn" data-i18n-title="btn.theme" title="Toggle theme">
         <svg class="theme-icon-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
         <svg class="theme-icon-dark" viewBox="0 0 24 24" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
       <button class="icon-btn" id="langToggleBtn" data-i18n-title="btn.language" title="Language">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-      </button>
-      <button class="icon-btn" id="settingsBtn" data-i18n-title="btn.settings" title="Settings">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <span class="version" id="appVersionSidebar"></span>
       <div class="lang-popover" id="langPopover">
@@ -1581,10 +1849,10 @@ button, input, select, textarea {
   </aside>
 
   <!-- ── Main area ── -->
-  <main class="app-main">
+  <main class="app-main" id="appMain">
     <div class="main-header">
-      <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" data-i18n-title="btn.menu" title="Menu">
-        <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      <button class="mobile-sidebar-toggle" id="mobileSidebarToggle" data-i18n-title="sidebar.sessions" title="Sessions">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <span class="main-header-title" data-i18n="header.title">Chat</span>
       <div class="model-selector">
@@ -1595,6 +1863,9 @@ button, input, select, textarea {
         </button>
       </div>
     </div>
+    <button class="session-sidebar-toggle" id="sessionSidebarToggle" type="button" data-i18n-title="sidebar.toggleSessions" title="Toggle sessions">
+      <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
 
     <div class="chat-area" id="chatArea">
       <div class="empty-state" id="emptyState">
@@ -1616,91 +1887,154 @@ button, input, select, textarea {
         </button>
       </div>
     </div>
+
+    <section class="tasks-page" id="tasksPage">
+      <div class="tasks-shell">
+        <div class="tasks-hero">
+          <div class="tasks-kicker" data-i18n="tasks.kicker">Control Console</div>
+          <h1 class="tasks-title" data-i18n="tasks.title">Tasks</h1>
+          <p class="tasks-subtitle" data-i18n="tasks.subtitle">Create scheduled tasks by asking Iron Hermes in chat. Use this page to manage existing cron jobs and inspect their run history.</p>
+        </div>
+
+        <div class="cron-panel">
+          <div class="cron-console-top">
+            <span class="settings-hint" data-i18n="cron.createHint">Create scheduled tasks by asking Iron Hermes in chat. This panel is for management only.</span>
+            <button class="cron-btn" id="cronRefreshBtn" type="button" data-i18n="cron.refresh">Refresh</button>
+          </div>
+          <div class="settings-status" id="cronStatus"></div>
+          <div class="cron-list" id="cronJobList"></div>
+          <div class="cron-edit-panel" id="cronEditPanel" style="display:none;">
+            <span class="settings-hint" data-i18n="cron.editHint">Edit the selected scheduled task.</span>
+            <input class="settings-input" id="cronNameInput" type="text" data-i18n-placeholder="cron.namePlaceholder" placeholder="Daily report">
+            <input class="settings-input" id="cronScheduleInput" type="text" data-i18n-placeholder="cron.schedulePlaceholder" placeholder="every 2h">
+            <textarea class="settings-textarea" id="cronPromptInput" data-i18n-placeholder="cron.promptPlaceholder" placeholder="What should Iron Hermes do on schedule?"></textarea>
+            <div class="cron-form-row">
+              <input class="settings-input" id="cronModelInput" type="text" data-i18n-placeholder="cron.modelPlaceholder" placeholder="model override (optional)">
+              <label class="toolset-toggle" for="cronEnabledInput">
+                <span data-i18n="cron.enabled">Enabled</span>
+                <input id="cronEnabledInput" type="checkbox" checked>
+              </label>
+            </div>
+            <span class="settings-hint" data-i18n="cron.scheduleHint">Schedules: every 30m, every 2h, daily 09:00, or 5-field cron. Times are UTC.</span>
+            <div class="cron-actions">
+              <button class="cron-btn primary" id="cronSaveBtn" type="button" data-i18n="cron.saveChanges">Save Changes</button>
+              <button class="cron-btn" id="cronCancelEditBtn" type="button" data-i18n="cron.cancelEdit" style="display:none;">Cancel Edit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="settings-page" id="settingsPage">
+      <div class="settings-shell">
+        <div class="settings-hero">
+          <div class="settings-kicker" data-i18n="settings.kicker">Configuration</div>
+          <h1 class="settings-page-title" data-i18n="settings.title">Settings</h1>
+          <p class="settings-subtitle" data-i18n="settings.subtitle">Configure provider access, model behavior, context compression, and enabled toolsets.</p>
+        </div>
+
+        <div class="settings-panel" id="settingsPanel">
+          <div class="settings-body">
+            <!-- Provider URL -->
+            <div class="settings-field">
+              <label class="settings-label" for="providerUrl" data-i18n="settings.providerUrl">Provider URL</label>
+              <input class="settings-input" id="providerUrl" type="text"
+                placeholder="http://localhost:9068/v1" value="http://localhost:9068/v1">
+            </div>
+
+            <!-- API Key -->
+            <div class="settings-field">
+              <label class="settings-label" for="apiKeyInput" data-i18n="settings.apiKey">API Key</label>
+              <div class="api-key-row">
+                <input class="settings-input" id="apiKeyInput" type="password" placeholder="">
+                <button class="api-key-copy-btn" id="apiKeyCopyBtn" data-i18n-title="btn.copy" title="Copy">
+                  <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Auxiliary Model -->
+            <div class="settings-field">
+              <label class="settings-label" for="auxModelSelect" data-i18n="settings.auxModel">Auxiliary Model</label>
+              <select class="settings-select" id="auxModelSelect">
+                <option value="" data-i18n="settings.auxModelNone">None</option>
+              </select>
+              <span class="settings-hint" data-i18n="settings.auxModelHint">No auxiliary model = degraded compression</span>
+            </div>
+
+            <!-- Compression Threshold -->
+            <div class="settings-field">
+              <label class="settings-label" data-i18n="settings.compression">Compression Threshold</label>
+              <div class="slider-row">
+                <input class="settings-slider" id="compressionSlider" type="range" min="50" max="95" step="5" value="65">
+                <span class="slider-value" id="sliderValueDisplay">65%</span>
+              </div>
+              <div class="slider-ticks">
+                <span class="slider-tick" data-i18n="settings.compressionConservative">50% Conservative</span>
+                <span class="slider-tick" data-i18n="settings.compressionDefault">65% Default</span>
+                <span class="slider-tick" data-i18n="settings.compressionAggressive">80% Aggressive</span>
+              </div>
+            </div>
+
+            <!-- Context Length -->
+            <div class="settings-field">
+              <label class="settings-label" for="contextLength" data-i18n="settings.contextLength">Context Length</label>
+              <input class="settings-input" id="contextLength" type="number" data-i18n-placeholder="settings.contextLengthPlaceholder" placeholder="auto" min="1">
+              <span class="settings-hint" data-i18n="settings.contextLengthHint">Leave empty for auto-detection</span>
+            </div>
+
+            <!-- Toolsets -->
+            <div class="settings-group">
+              <label class="settings-label" data-i18n="settings.toolsets">Toolsets</label>
+              <div id="toolsetToggles" class="toolset-toggles"></div>
+            </div>
+
+            <!-- About & Updates -->
+            <div class="settings-group" id="updatesGroup" style="display: none;">
+              <label class="settings-label" data-i18n="settings.about">About</label>
+              <div class="update-row">
+                <span class="update-version" id="appVersion">v—</span>
+                <button class="check-updates-btn" id="checkUpdatesBtn" data-i18n="settings.checkUpdates">Check for Updates</button>
+              </div>
+              <div class="update-status" id="updateStatus"></div>
+            </div>
+          </div>
+
+          <div class="settings-footer">
+            <button class="settings-save-btn" id="settingsSaveBtn" data-i18n="settings.save">Save</button>
+            <div class="settings-status" id="settingsStatus"></div>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
-</div>
 
-<!-- ── Settings backdrop ── -->
-<div class="settings-backdrop" id="settingsBackdrop"></div>
-
-<!-- ── Settings panel ── -->
-<div class="settings-panel" id="settingsPanel">
-  <div class="settings-panel-header">
-    <span class="settings-panel-title" data-i18n="settings.title">Settings</span>
-    <button class="settings-close-btn" id="settingsCloseBtn" data-i18n-title="btn.close" title="Close">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-  </div>
-
-  <div class="settings-body">
-    <!-- Provider URL -->
-    <div class="settings-field">
-      <label class="settings-label" for="providerUrl" data-i18n="settings.providerUrl">Provider URL</label>
-      <input class="settings-input" id="providerUrl" type="text"
-        placeholder="http://localhost:9068/v1" value="http://localhost:9068/v1">
+  <!-- ── Session sidebar ── -->
+  <aside class="app-sidebar session-sidebar" id="appSidebar">
+    <div class="sidebar-logo">
+      <img class="sidebar-logo-mark" src="/assets/logo.png" alt="Iron Hermes">
+      <span class="sidebar-logo-text" data-i18n="sidebar.sessions">Sessions</span>
     </div>
 
-    <!-- API Key -->
-    <div class="settings-field">
-      <label class="settings-label" for="apiKeyInput" data-i18n="settings.apiKey">API Key</label>
-      <div class="api-key-row">
-        <input class="settings-input" id="apiKeyInput" type="password" placeholder="">
-        <button class="api-key-copy-btn" id="apiKeyCopyBtn" data-i18n-title="btn.copy" title="Copy">
-          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button class="nav-item" id="newChatBtn" data-i18n-title="sidebar.newChat" title="New Chat">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span data-i18n="sidebar.newChat">New Chat</span>
+      </button>
+      <div class="history-search" id="historySearch">
+        <span class="history-search-icon">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input id="historySearchInput" type="text" data-i18n-placeholder="sidebar.searchPlaceholder" placeholder="Search sessions...">
+        <button class="history-search-clear" id="historySearchClear" type="button" data-i18n-title="btn.close" title="Clear">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-    </div>
-
-    <!-- Auxiliary Model -->
-    <div class="settings-field">
-      <label class="settings-label" for="auxModelSelect" data-i18n="settings.auxModel">Auxiliary Model</label>
-      <select class="settings-select" id="auxModelSelect">
-        <option value="" data-i18n="settings.auxModelNone">None</option>
-      </select>
-      <span class="settings-hint" data-i18n="settings.auxModelHint">No auxiliary model = degraded compression</span>
-    </div>
-
-    <!-- Compression Threshold -->
-    <div class="settings-field">
-      <label class="settings-label" data-i18n="settings.compression">Compression Threshold</label>
-      <div class="slider-row">
-        <input class="settings-slider" id="compressionSlider" type="range" min="50" max="95" step="5" value="65">
-        <span class="slider-value" id="sliderValueDisplay">65%</span>
-      </div>
-      <div class="slider-ticks">
-        <span class="slider-tick" data-i18n="settings.compressionConservative">50% Conservative</span>
-        <span class="slider-tick" data-i18n="settings.compressionDefault">65% Default</span>
-        <span class="slider-tick" data-i18n="settings.compressionAggressive">80% Aggressive</span>
-      </div>
-    </div>
-
-    <!-- Context Length -->
-    <div class="settings-field">
-      <label class="settings-label" for="contextLength" data-i18n="settings.contextLength">Context Length</label>
-      <input class="settings-input" id="contextLength" type="number" data-i18n-placeholder="settings.contextLengthPlaceholder" placeholder="auto" min="1">
-      <span class="settings-hint" data-i18n="settings.contextLengthHint">Leave empty for auto-detection</span>
-    </div>
-
-    <!-- Toolsets -->
-    <div class="settings-group">
-      <label class="settings-label" data-i18n="settings.toolsets">Toolsets</label>
-      <div id="toolsetToggles" class="toolset-toggles"></div>
-    </div>
-
-    <!-- About & Updates -->
-    <div class="settings-group" id="updatesGroup" style="display: none;">
-      <label class="settings-label" data-i18n="settings.about">About</label>
-      <div class="update-row">
-        <span class="update-version" id="appVersion">v—</span>
-        <button class="check-updates-btn" id="checkUpdatesBtn" data-i18n="settings.checkUpdates">Check for Updates</button>
-      </div>
-      <div class="update-status" id="updateStatus"></div>
-    </div>
-  </div>
-
-  <div class="settings-footer">
-    <button class="settings-save-btn" id="settingsSaveBtn" data-i18n="settings.save">Save</button>
-    <div class="settings-status" id="settingsStatus"></div>
-  </div>
+      <div class="history-section" id="historySection"></div>
+      <div class="history-loader" id="historyLoader" style="display:none;" data-i18n="sidebar.loading">Loading...</div>
+      <div class="history-empty" id="historyEmpty" style="display:none;" data-i18n="sidebar.historyEmpty">No sessions yet</div>
+    </nav>
+  </aside>
 </div>
 
 <!-- ── Update modal ── -->
@@ -1734,6 +2068,9 @@ button, input, select, textarea {
   const I18N = {
     en: {
       'sidebar.newChat': 'New Chat',
+      'sidebar.chat': 'Chat',
+      'sidebar.sessions': 'Sessions',
+      'sidebar.toggleSessions': 'Toggle sessions',
       'sidebar.loading': 'Loading...',
       'sidebar.historyEmpty': 'No sessions yet',
       'sidebar.searchPlaceholder': 'Search sessions...',
@@ -1744,6 +2081,7 @@ button, input, select, textarea {
       'sidebar.last7days': 'Previous 7 Days',
       'sidebar.last30days': 'Previous 30 Days',
       'sidebar.older': 'Older',
+      'sidebar.tasks': 'Tasks',
       'session.rename': 'Rename',
       'session.delete': 'Delete',
       'session.renamePrompt': 'Rename session (leave empty to reset):',
@@ -1754,6 +2092,8 @@ button, input, select, textarea {
       'empty.title': 'Iron Hermes',
       'empty.tagline': 'Intelligent Agent',
       'settings.title': 'Settings',
+      'settings.kicker': 'Configuration',
+      'settings.subtitle': 'Configure provider access, model behavior, context compression, and enabled toolsets.',
       'settings.providerUrl': 'Provider URL',
       'settings.apiKey': 'API Key',
       'settings.auxModel': 'Auxiliary Model',
@@ -1772,6 +2112,32 @@ button, input, select, textarea {
       'settings.save': 'Save',
       'settings.saved': 'Saved',
       'settings.errorPrefix': 'Error: {msg}',
+      'tasks.kicker': 'Control Console',
+      'tasks.title': 'Tasks',
+      'tasks.subtitle': 'Create scheduled tasks by asking Iron Hermes in chat. Use this page to manage existing cron jobs and inspect their run history.',
+      'cron.title': 'Cron Jobs',
+      'cron.createHint': 'Create scheduled tasks by asking Iron Hermes in chat. This panel is for management only.',
+      'cron.editHint': 'Edit the selected scheduled task.',
+      'cron.namePlaceholder': 'Daily report',
+      'cron.schedulePlaceholder': 'every 2h',
+      'cron.promptPlaceholder': 'What should Iron Hermes do on schedule?',
+      'cron.modelPlaceholder': 'model override (optional)',
+      'cron.enabled': 'Enabled',
+      'cron.scheduleHint': 'Schedules: every 30m, every 2h, daily 09:00, or 5-field cron. Times are UTC.',
+      'cron.saveChanges': 'Save Changes',
+      'cron.cancelEdit': 'Cancel Edit',
+      'cron.refresh': 'Refresh',
+      'cron.empty': 'No cron jobs yet. Create one by asking in chat.',
+      'cron.runNow': 'Run now',
+      'cron.edit': 'Edit',
+      'cron.pause': 'Pause',
+      'cron.resume': 'Resume',
+      'cron.delete': 'Delete',
+      'cron.runs': 'Runs',
+      'cron.saved': 'Cron job saved.',
+      'cron.started': 'Cron job started.',
+      'cron.confirmDelete': 'Delete this cron job and its runs?',
+      'cron.errorPrefix': 'Cron error: {msg}',
       'updater.title': 'Update Available',
       'updater.current': 'Current',
       'updater.new': 'New',
@@ -1808,6 +2174,9 @@ button, input, select, textarea {
     },
     zh: {
       'sidebar.newChat': '新建会话',
+      'sidebar.chat': '对话',
+      'sidebar.sessions': '会话',
+      'sidebar.toggleSessions': '展开/收起会话栏',
       'sidebar.loading': '加载中...',
       'sidebar.historyEmpty': '暂无会话',
       'sidebar.searchPlaceholder': '搜索会话...',
@@ -1818,6 +2187,7 @@ button, input, select, textarea {
       'sidebar.last7days': '最近 7 天',
       'sidebar.last30days': '最近 30 天',
       'sidebar.older': '更早',
+      'sidebar.tasks': '任务',
       'session.rename': '重命名',
       'session.delete': '删除',
       'session.renamePrompt': '重命名会话（留空恢复默认）：',
@@ -1828,6 +2198,8 @@ button, input, select, textarea {
       'empty.title': 'Iron Hermes',
       'empty.tagline': '智能代理',
       'settings.title': '设置',
+      'settings.kicker': '配置',
+      'settings.subtitle': '配置 Provider 访问、模型行为、上下文压缩和启用的工具集。',
       'settings.providerUrl': 'Provider URL',
       'settings.apiKey': 'API Key',
       'settings.auxModel': '辅助模型',
@@ -1846,6 +2218,32 @@ button, input, select, textarea {
       'settings.save': '保存',
       'settings.saved': '已保存',
       'settings.errorPrefix': '错误：{msg}',
+      'tasks.kicker': '控制台',
+      'tasks.title': '任务',
+      'tasks.subtitle': '通过聊天向 Iron Hermes 提出定时需求来创建任务。在此页面管理已有定时任务并查看运行记录。',
+      'cron.title': '定时任务',
+      'cron.createHint': '通过聊天向 Iron Hermes 提出定时需求来创建任务。此面板只用于管理。',
+      'cron.editHint': '编辑已选定时任务。',
+      'cron.namePlaceholder': '每日汇报',
+      'cron.schedulePlaceholder': 'every 2h',
+      'cron.promptPlaceholder': '按计划执行时，让 Iron Hermes 做什么？',
+      'cron.modelPlaceholder': '模型覆盖（可选）',
+      'cron.enabled': '启用',
+      'cron.scheduleHint': '支持 every 30m、every 2h、daily 09:00 或 5 字段 cron。时间按 UTC 解释。',
+      'cron.saveChanges': '保存修改',
+      'cron.cancelEdit': '取消编辑',
+      'cron.refresh': '刷新',
+      'cron.empty': '暂无定时任务。请在聊天中提出定时需求来创建。',
+      'cron.runNow': '立即运行',
+      'cron.edit': '编辑',
+      'cron.pause': '暂停',
+      'cron.resume': '恢复',
+      'cron.delete': '删除',
+      'cron.runs': '运行记录',
+      'cron.saved': '定时任务已保存。',
+      'cron.started': '定时任务已启动。',
+      'cron.confirmDelete': '删除此定时任务及其运行记录？',
+      'cron.errorPrefix': '定时任务错误：{msg}',
       'updater.title': '发现新版本',
       'updater.current': '当前',
       'updater.new': '新版',
@@ -1923,23 +2321,87 @@ button, input, select, textarea {
     applyI18n();
     syncLangPopover();
     if (typeof renderHistory === 'function') renderHistory();
+    if (typeof renderCronJobs === 'function') renderCronJobs();
+    if (typeof syncPageState === 'function') syncPageState();
   }
 
+  const appMain = document.getElementById('appMain');
+  const mainHeaderTitle = document.querySelector('.main-header-title');
   const chatArea = document.getElementById('chatArea');
   const emptyState = document.getElementById('emptyState');
   const msgInput = document.getElementById('msgInput');
   const sendBtn = document.getElementById('sendBtn');
   const sendIcon = document.getElementById('sendIcon');
   const modelSelect = document.getElementById('modelSelect');
+  const chatNavBtn = document.getElementById('chatNavBtn');
+  const tasksNavBtn = document.getElementById('tasksNavBtn');
+  const settingsBtn = document.getElementById('settingsBtn');
+  const sessionSidebarToggle = document.getElementById('sessionSidebarToggle');
+  const newChatBtn = document.getElementById('newChatBtn');
+
+  let currentPage = 'chat';
+
+  function syncPageState() {
+    var isTasks = currentPage === 'tasks';
+    var isSettings = currentPage === 'settings';
+    var wasCollapsed = appSidebar.classList.contains('collapsed');
+    appMain.classList.toggle('show-tasks', isTasks);
+    appMain.classList.toggle('show-settings', isSettings);
+    if (currentPage !== 'chat') {
+      appSidebar.classList.add('collapsed');
+    } else if (!wasCollapsed) {
+      appSidebar.classList.remove('collapsed');
+    }
+    chatNavBtn.classList.toggle('active', currentPage === 'chat');
+    tasksNavBtn.classList.toggle('active', isTasks);
+    settingsBtn.classList.toggle('active', isSettings);
+    sessionSidebarToggle.classList.toggle('expanded', currentPage === 'chat' && !appSidebar.classList.contains('collapsed'));
+    newChatBtn.classList.remove('active');
+    mainHeaderTitle.textContent = isTasks ? t('tasks.title') : (isSettings ? t('settings.title') : t('header.title'));
+  }
+
+  function showChatPage() {
+    currentPage = 'chat';
+    appSidebar.classList.add('collapsed');
+    appSidebar.classList.remove('open');
+    syncPageState();
+  }
+
+  function toggleSessionSidebar() {
+    if (currentPage !== 'chat') return;
+    appSidebar.classList.toggle('collapsed');
+    appSidebar.classList.toggle('open', !appSidebar.classList.contains('collapsed'));
+    sessionSidebarToggle.classList.toggle('expanded', !appSidebar.classList.contains('collapsed'));
+  }
+
+  function showTasksPage() {
+    currentPage = 'tasks';
+    syncPageState();
+    appSidebar.classList.remove('open');
+    loadCronJobs();
+  }
+
+  function showSettingsPage() {
+    currentPage = 'settings';
+    syncPageState();
+    appSidebar.classList.remove('open');
+    loadToolsets();
+  }
 
   // Sidebar (mobile)
   const appSidebar = document.getElementById('appSidebar');
   const mobileSidebarToggle = document.getElementById('mobileSidebarToggle');
   if (mobileSidebarToggle) {
-    mobileSidebarToggle.addEventListener('click', function() {
-      appSidebar.classList.toggle('open');
-    });
+    mobileSidebarToggle.addEventListener('click', toggleSessionSidebar);
   }
+  sessionSidebarToggle.addEventListener('click', toggleSessionSidebar);
+  chatNavBtn.addEventListener('click', function() {
+    showChatPage();
+    appSidebar.classList.remove('open');
+    msgInput.focus();
+  });
+  tasksNavBtn.addEventListener('click', showTasksPage);
+  settingsBtn.addEventListener('click', showSettingsPage);
 
   // Language popover
   const langToggleBtn = document.getElementById('langToggleBtn');
@@ -1983,10 +2445,7 @@ button, input, select, textarea {
   });
 
   // Settings
-  const settingsBtn = document.getElementById('settingsBtn');
   const settingsPanel = document.getElementById('settingsPanel');
-  const settingsBackdrop = document.getElementById('settingsBackdrop');
-  const settingsCloseBtn = document.getElementById('settingsCloseBtn');
   const providerUrlInput = document.getElementById('providerUrl');
   const apiKeyInput = document.getElementById('apiKeyInput');
   const apiKeyCopyBtn = document.getElementById('apiKeyCopyBtn');
@@ -1996,6 +2455,17 @@ button, input, select, textarea {
   const contextLengthInput = document.getElementById('contextLength');
   const settingsSaveBtn = document.getElementById('settingsSaveBtn');
   const settingsStatus = document.getElementById('settingsStatus');
+  const cronEditPanel = document.getElementById('cronEditPanel');
+  const cronNameInput = document.getElementById('cronNameInput');
+  const cronScheduleInput = document.getElementById('cronScheduleInput');
+  const cronPromptInput = document.getElementById('cronPromptInput');
+  const cronModelInput = document.getElementById('cronModelInput');
+  const cronEnabledInput = document.getElementById('cronEnabledInput');
+  const cronSaveBtn = document.getElementById('cronSaveBtn');
+  const cronCancelEditBtn = document.getElementById('cronCancelEditBtn');
+  const cronRefreshBtn = document.getElementById('cronRefreshBtn');
+  const cronStatus = document.getElementById('cronStatus');
+  const cronJobList = document.getElementById('cronJobList');
 
   apiKeyCopyBtn.addEventListener('click', function() {
     var val = apiKeyInput.value;
@@ -2163,35 +2633,238 @@ button, input, select, textarea {
     } catch (e) {}
   }
 
+  // ── Cron jobs ──
+  let cronJobs = [];
+  let editingCronId = null;
+  let editingCronJob = null;
+
+  function setCronStatus(message, isError) {
+    cronStatus.textContent = message || '';
+    cronStatus.className = 'settings-status' + (message ? (isError ? ' err' : ' ok') : '');
+    if (message && !isError) {
+      setTimeout(function() {
+        if (cronStatus.textContent === message) setCronStatus('', false);
+      }, 2200);
+    }
+  }
+
+  function formatTime(value) {
+    if (!value) return '—';
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return value;
+    return d.toLocaleString();
+  }
+
+  function cronPayloadFromForm() {
+    return {
+      name: cronNameInput.value.trim(),
+      schedule: cronScheduleInput.value.trim(),
+      prompt: cronPromptInput.value.trim(),
+      model: cronModelInput.value.trim() || null,
+      enabled: cronEnabledInput.checked,
+      disabled_toolsets: (editingCronJob && editingCronJob.disabled_toolsets) || []
+    };
+  }
+
+  function resetCronForm() {
+    editingCronId = null;
+    editingCronJob = null;
+    cronNameInput.value = '';
+    cronScheduleInput.value = '';
+    cronPromptInput.value = '';
+    cronModelInput.value = '';
+    cronEnabledInput.checked = true;
+    cronSaveBtn.textContent = t('cron.saveChanges');
+    cronCancelEditBtn.style.display = 'none';
+    cronEditPanel.style.display = 'none';
+  }
+
+  async function loadCronJobs() {
+    try {
+      var resp = await fetch('/api/cron/jobs');
+      if (!resp.ok) throw new Error(await resp.text());
+      var data = await resp.json();
+      cronJobs = data.jobs || [];
+      renderCronJobs();
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    }
+  }
+
+  function renderCronJobs() {
+    cronJobList.innerHTML = '';
+    if (!cronJobs.length) {
+      var empty = document.createElement('div');
+      empty.className = 'settings-hint';
+      empty.textContent = t('cron.empty');
+      cronJobList.appendChild(empty);
+      return;
+    }
+
+    cronJobs.forEach(function(job) {
+      var div = document.createElement('div');
+      div.className = 'cron-job';
+      var status = job.running ? 'running' : (job.enabled ? 'enabled' : '');
+      var statusText = job.running ? 'running' : (job.enabled ? 'enabled' : 'paused');
+      div.innerHTML =
+        '<div class="cron-job-head">' +
+          '<div class="cron-job-title">' + escapeHtml(job.name) + '</div>' +
+          '<div class="cron-job-status ' + status + '">' + escapeHtml(statusText) + '</div>' +
+        '</div>' +
+        '<div class="cron-meta">' +
+          '<div><strong>schedule</strong>: ' + escapeHtml(job.schedule) + '</div>' +
+          '<div><strong>next</strong>: ' + escapeHtml(formatTime(job.next_run_at)) + '</div>' +
+          '<div><strong>last</strong>: ' + escapeHtml(formatTime(job.last_run_at)) + ' · <strong>failures</strong>: ' + job.failure_count + '</div>' +
+        '</div>';
+
+      var actions = document.createElement('div');
+      actions.className = 'cron-job-actions';
+
+      var runBtn = cronActionButton(t('cron.runNow'), function() { runCronJob(job.id); });
+      runBtn.disabled = job.running;
+      actions.appendChild(runBtn);
+
+      actions.appendChild(cronActionButton(t('cron.edit'), function() { editCronJob(job); }));
+      actions.appendChild(cronActionButton(job.enabled ? t('cron.pause') : t('cron.resume'), function() {
+        patchCronJob(job.id, { enabled: !job.enabled });
+      }));
+      actions.appendChild(cronActionButton(t('cron.runs'), function() { toggleCronRuns(div, job.id); }));
+      actions.appendChild(cronActionButton(t('cron.delete'), function() { deleteCronJob(job.id); }, 'danger'));
+      div.appendChild(actions);
+      cronJobList.appendChild(div);
+    });
+  }
+
+  function cronActionButton(label, handler, extraClass) {
+    var btn = document.createElement('button');
+    btn.className = 'cron-btn' + (extraClass ? ' ' + extraClass : '');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.addEventListener('click', handler);
+    return btn;
+  }
+
+  function editCronJob(job) {
+    editingCronId = job.id;
+    editingCronJob = job;
+    cronNameInput.value = job.name || '';
+    cronScheduleInput.value = job.schedule || '';
+    cronPromptInput.value = job.prompt || '';
+    cronModelInput.value = job.model || '';
+    cronEnabledInput.checked = !!job.enabled;
+    cronSaveBtn.textContent = t('cron.saveChanges');
+    cronCancelEditBtn.style.display = '';
+    cronEditPanel.style.display = 'flex';
+    cronNameInput.focus();
+  }
+
+  async function saveCronJob() {
+    if (!editingCronId) {
+      setCronStatus(t('cron.errorPrefix', { msg: 'select a cron job to edit first' }), true);
+      return;
+    }
+    var payload = cronPayloadFromForm();
+    if (!payload.name || !payload.schedule || !payload.prompt) {
+      setCronStatus(t('cron.errorPrefix', { msg: 'name, schedule, and prompt are required' }), true);
+      return;
+    }
+    cronSaveBtn.disabled = true;
+    try {
+      var resp = await fetch('/api/cron/jobs/' + encodeURIComponent(editingCronId), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      setCronStatus(t('cron.saved'), false);
+      resetCronForm();
+      await loadCronJobs();
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    } finally {
+      cronSaveBtn.disabled = false;
+    }
+  }
+
+  async function patchCronJob(id, patch) {
+    try {
+      var resp = await fetch('/api/cron/jobs/' + encodeURIComponent(id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      await loadCronJobs();
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    }
+  }
+
+  async function runCronJob(id) {
+    try {
+      var resp = await fetch('/api/cron/jobs/' + encodeURIComponent(id) + '/run', { method: 'POST' });
+      if (!resp.ok) throw new Error(await resp.text());
+      setCronStatus(t('cron.started'), false);
+      await loadCronJobs();
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    }
+  }
+
+  async function deleteCronJob(id) {
+    if (!window.confirm(t('cron.confirmDelete'))) return;
+    try {
+      var resp = await fetch('/api/cron/jobs/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!resp.ok) throw new Error(await resp.text());
+      if (editingCronId === id) resetCronForm();
+      await loadCronJobs();
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    }
+  }
+
+  async function toggleCronRuns(container, id) {
+    var existing = container.querySelector('.cron-run-list');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    try {
+      var resp = await fetch('/api/cron/jobs/' + encodeURIComponent(id) + '/runs?limit=10');
+      if (!resp.ok) throw new Error(await resp.text());
+      var data = await resp.json();
+      var runs = data.runs || [];
+      var list = document.createElement('div');
+      list.className = 'cron-run-list';
+      if (!runs.length) {
+        var empty = document.createElement('div');
+        empty.className = 'settings-hint';
+        empty.textContent = 'No runs yet.';
+        list.appendChild(empty);
+      }
+      runs.forEach(function(run) {
+        var item = document.createElement('div');
+        item.className = 'cron-run';
+        var headline = '#' + run.id + ' · ' + run.status + ' · ' + formatTime(run.started_at);
+        var detail = run.error || run.output || '';
+        item.innerHTML =
+          '<div>' + escapeHtml(headline) + '</div>' +
+          (detail ? '<div class="cron-run-output">' + escapeHtml(detail) + '</div>' : '');
+        list.appendChild(item);
+      });
+      container.appendChild(list);
+    } catch (e) {
+      setCronStatus(t('cron.errorPrefix', { msg: e.message }), true);
+    }
+  }
+
+  cronSaveBtn.addEventListener('click', saveCronJob);
+  cronCancelEditBtn.addEventListener('click', resetCronForm);
+  cronRefreshBtn.addEventListener('click', loadCronJobs);
+
   // ── Slider live update ──
   compressionSlider.addEventListener('input', function() {
     sliderValueDisplay.textContent = compressionSlider.value + '%';
-  });
-
-  // ── Settings panel open/close ──
-  function openSettings() {
-    settingsPanel.classList.add('open');
-    settingsBackdrop.classList.add('open');
-    settingsBtn.classList.add('active');
-    loadToolsets();
-  }
-
-  function closeSettings() {
-    settingsPanel.classList.remove('open');
-    settingsBackdrop.classList.remove('open');
-    settingsBtn.classList.remove('active');
-  }
-
-  settingsBtn.addEventListener('click', function() {
-    if (settingsPanel.classList.contains('open')) closeSettings();
-    else openSettings();
-  });
-
-  settingsCloseBtn.addEventListener('click', closeSettings);
-  settingsBackdrop.addEventListener('click', closeSettings);
-
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && settingsPanel.classList.contains('open')) closeSettings();
   });
 
   // ── Save config ──
@@ -2645,6 +3318,8 @@ button, input, select, textarea {
     loading: false,
   };
 
+  appSidebar.classList.add('collapsed');
+
   function dayDiff(iso) {
     // Returns number of whole days between today (local) and the given UTC date
     var d = new Date(iso);
@@ -2865,6 +3540,10 @@ button, input, select, textarea {
   }
 
   async function switchToSession(id, targetMessageId, query) {
+    currentPage = 'chat';
+    appSidebar.classList.add('collapsed');
+    appSidebar.classList.remove('open');
+    syncPageState();
     var sameSession = (id === chatId && messages.length > 0);
     // Decide whether a reload is required: different session, empty chat, or
     // the targeted message is not yet in the current DOM (e.g. the user is
@@ -2944,6 +3623,10 @@ button, input, select, textarea {
   }
 
   function startNewChat() {
+    currentPage = 'chat';
+    appSidebar.classList.add('collapsed');
+    appSidebar.classList.remove('open');
+    syncPageState();
     chatId = crypto.randomUUID();
     localStorage.setItem('iron_chat_id', chatId);
 
@@ -3097,7 +3780,7 @@ button, input, select, textarea {
     } catch (e) {}
   }
 
-  document.getElementById('newChatBtn').addEventListener('click', startNewChat);
+  newChatBtn.addEventListener('click', startNewChat);
 
   // Initial history fetch + restore current session if it's in history
   (async function() {
@@ -3224,6 +3907,7 @@ button, input, select, textarea {
   document.documentElement.setAttribute('lang', currentLocale === 'zh' ? 'zh-CN' : 'en');
   applyI18n();
   syncLangPopover();
+  syncPageState();
 
   msgInput.focus();
 })();

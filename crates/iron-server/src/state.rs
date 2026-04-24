@@ -15,6 +15,7 @@ use iron_tool_api::{ToolModule, ToolRegistry};
 use iron_tools::{file_module::FileTools, terminal_module::TerminalTools, web_module::WebTools};
 
 use crate::config::{IronConfig, RuntimeConfig, ServerConfig};
+use crate::cron_runner::spawn_cron_scheduler;
 
 pub struct AppState {
     pub config: ServerConfig,
@@ -96,8 +97,9 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         auxiliary_client,
     ));
 
-    // Register session_search tool
+    // Register session_search and cronjob tools
     iron_core::session::search_tool::register_session_search(&mut registry, Arc::clone(&searcher));
+    iron_core::cron_tool::register_cronjob(&mut registry, Arc::clone(&session_store));
 
     // Register execute_code using a OnceLock to break the circular dependency:
     // the handler needs Arc<ToolRegistry> for sandbox RPC dispatch, but
@@ -138,6 +140,12 @@ pub fn build_app_state(config: IronConfig) -> AppState {
         todo_state,
         Arc::clone(&session_store),
     ));
+
+    spawn_cron_scheduler(
+        Arc::clone(&runtime),
+        Arc::clone(&session_store),
+        Arc::clone(&runtime_config),
+    );
 
     AppState {
         config: server_config,

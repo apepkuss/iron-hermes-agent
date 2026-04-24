@@ -1,5 +1,7 @@
-use rusqlite::{Connection, Result as SqlResult, params};
+use rusqlite::{Connection, OptionalExtension, Result as SqlResult, params};
+use uuid::Uuid;
 
+use crate::cron::{CronJob, CronJobPatch, CronRun, CronRunFinish, NewCronJob, next_run_epoch};
 use crate::error::CoreError;
 
 use super::types::{Session, SessionMessage, TokenUsage};
@@ -80,6 +82,44 @@ impl SessionStore {
 
                 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
                 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
+
+                CREATE TABLE IF NOT EXISTS cron_jobs (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    prompt TEXT NOT NULL,
+                    schedule TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    model TEXT,
+                    disabled_toolsets TEXT NOT NULL DEFAULT '[]',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    next_run_at TEXT,
+                    next_run_at_epoch INTEGER,
+                    last_run_at TEXT,
+                    running INTEGER NOT NULL DEFAULT 0,
+                    failure_count INTEGER NOT NULL DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS cron_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    job_id TEXT NOT NULL,
+                    started_at TEXT NOT NULL,
+                    finished_at TEXT,
+                    status TEXT NOT NULL,
+                    output TEXT,
+                    error TEXT,
+                    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                    completion_tokens INTEGER NOT NULL DEFAULT 0,
+                    total_tokens INTEGER NOT NULL DEFAULT 0,
+                    duration_ms INTEGER NOT NULL DEFAULT 0,
+                    session_id TEXT,
+                    FOREIGN KEY (job_id) REFERENCES cron_jobs(id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_cron_jobs_due
+                    ON cron_jobs(enabled, running, next_run_at_epoch);
+                CREATE INDEX IF NOT EXISTS idx_cron_runs_job
+                    ON cron_runs(job_id, id DESC);
                 ",
             )
             .map_err(|e| CoreError::Session(format!("Failed to create tables: {e}")))?;
@@ -477,9 +517,392 @@ impl SessionStore {
         }
         Ok(())
     }
+
+    pub fn create_cron_job(&self, input: NewCronJob) -> Result<CronJob, CoreError> {
+        let now_epoch = unix_now();
+        let next_epoch = if input.enabled {
+            Some(next_run_epoch(&input.schedule, now_epoch)?)
+        } else {
+            None
+        };
+        let now = chrono_from_unix_secs(now_epoch);
+        let id = Uuid::new_v4().to_string();
+        let disabled_toolsets =
+            serde_json::to_string(&input.disabled_toolsets).unwrap_or_else(|_| "[]".to_string());
+        let next_run_at = next_epoch.map(chrono_from_unix_secs);
+
+        self.conn
+            .execute(
+                "INSERT INTO cron_jobs (
+                    id, name, prompt, schedule, enabled, model, disabled_toolsets,
+                    created_at, updated_at, next_run_at, next_run_at_epoch,
+                    last_run_at, running, failure_count
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, NULL, 0, 0)",
+                params![
+                    id,
+                    input.name,
+                    input.prompt,
+                    input.schedule,
+                    input.enabled as i32,
+                    input.model,
+                    disabled_toolsets,
+                    now,
+                    now,
+                    next_run_at,
+                    next_epoch,
+                ],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to create cron job: {e}")))?;
+
+        self.get_cron_job(&id)?
+            .ok_or_else(|| CoreError::Session("created cron job not found".to_string()))
+    }
+
+    pub fn list_cron_jobs(&self) -> Result<Vec<CronJob>, CoreError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, name, prompt, schedule, enabled, model, disabled_toolsets,
+                        created_at, updated_at, next_run_at, next_run_at_epoch,
+                        last_run_at, running, failure_count
+                 FROM cron_jobs
+                 ORDER BY created_at DESC",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to prepare cron job list: {e}")))?;
+        let rows = stmt
+            .query_map([], row_to_cron_job)
+            .map_err(|e| CoreError::Session(format!("Failed to list cron jobs: {e}")))?;
+        collect_rows(rows, "cron job")
+    }
+
+    pub fn get_cron_job(&self, id: &str) -> Result<Option<CronJob>, CoreError> {
+        self.conn
+            .query_row(
+                "SELECT id, name, prompt, schedule, enabled, model, disabled_toolsets,
+                        created_at, updated_at, next_run_at, next_run_at_epoch,
+                        last_run_at, running, failure_count
+                 FROM cron_jobs WHERE id = ?1",
+                params![id],
+                row_to_cron_job,
+            )
+            .optional()
+            .map_err(|e| CoreError::Session(format!("Failed to get cron job: {e}")))
+    }
+
+    pub fn update_cron_job(&self, id: &str, patch: CronJobPatch) -> Result<CronJob, CoreError> {
+        let Some(mut job) = self.get_cron_job(id)? else {
+            return Err(CoreError::Session(format!("Cron job not found: {id}")));
+        };
+
+        if let Some(name) = patch.name {
+            job.name = name;
+        }
+        if let Some(prompt) = patch.prompt {
+            job.prompt = prompt;
+        }
+        if let Some(schedule) = patch.schedule {
+            job.schedule = schedule;
+        }
+        if let Some(enabled) = patch.enabled {
+            job.enabled = enabled;
+        }
+        if let Some(model) = patch.model {
+            job.model = model;
+        }
+        if let Some(disabled) = patch.disabled_toolsets {
+            job.disabled_toolsets = disabled;
+        }
+
+        let now_epoch = unix_now();
+        let updated_at = chrono_from_unix_secs(now_epoch);
+        let next_epoch = if job.enabled && !job.running {
+            Some(next_run_epoch(&job.schedule, now_epoch)?)
+        } else {
+            None
+        };
+        let next_run_at = next_epoch.map(chrono_from_unix_secs);
+        let disabled_toolsets =
+            serde_json::to_string(&job.disabled_toolsets).unwrap_or_else(|_| "[]".to_string());
+
+        let rows = self
+            .conn
+            .execute(
+                "UPDATE cron_jobs
+                 SET name = ?1, prompt = ?2, schedule = ?3, enabled = ?4,
+                     model = ?5, disabled_toolsets = ?6, updated_at = ?7,
+                     next_run_at = ?8, next_run_at_epoch = ?9
+                 WHERE id = ?10",
+                params![
+                    job.name,
+                    job.prompt,
+                    job.schedule,
+                    job.enabled as i32,
+                    job.model,
+                    disabled_toolsets,
+                    updated_at,
+                    next_run_at,
+                    next_epoch,
+                    id,
+                ],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to update cron job: {e}")))?;
+
+        if rows == 0 {
+            return Err(CoreError::Session(format!("Cron job not found: {id}")));
+        }
+        self.get_cron_job(id)?
+            .ok_or_else(|| CoreError::Session(format!("Cron job not found after update: {id}")))
+    }
+
+    pub fn delete_cron_job(&self, id: &str) -> Result<(), CoreError> {
+        self.conn
+            .execute("DELETE FROM cron_runs WHERE job_id = ?1", params![id])
+            .map_err(|e| CoreError::Session(format!("Failed to delete cron runs: {e}")))?;
+        let rows = self
+            .conn
+            .execute("DELETE FROM cron_jobs WHERE id = ?1", params![id])
+            .map_err(|e| CoreError::Session(format!("Failed to delete cron job: {e}")))?;
+        if rows == 0 {
+            return Err(CoreError::Session(format!("Cron job not found: {id}")));
+        }
+        Ok(())
+    }
+
+    pub fn schedule_cron_job_now(&self, id: &str) -> Result<CronJob, CoreError> {
+        let Some(job) = self.get_cron_job(id)? else {
+            return Err(CoreError::Session(format!("Cron job not found: {id}")));
+        };
+        if job.running {
+            return Err(CoreError::Session(format!(
+                "Cron job already running: {id}"
+            )));
+        }
+        if !job.enabled {
+            return Err(CoreError::Session(format!(
+                "Cron job is paused; resume it before running: {id}"
+            )));
+        }
+
+        let now_epoch = unix_now();
+        let next_run_at = chrono_from_unix_secs(now_epoch);
+        self.conn
+            .execute(
+                "UPDATE cron_jobs
+                 SET next_run_at = ?1, next_run_at_epoch = ?2
+                 WHERE id = ?3",
+                params![next_run_at, now_epoch, id],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to schedule cron job now: {e}")))?;
+
+        self.get_cron_job(id)?
+            .ok_or_else(|| CoreError::Session(format!("Cron job not found after update: {id}")))
+    }
+
+    pub fn due_cron_jobs(&self, now_epoch: i64, limit: u32) -> Result<Vec<CronJob>, CoreError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, name, prompt, schedule, enabled, model, disabled_toolsets,
+                        created_at, updated_at, next_run_at, next_run_at_epoch,
+                        last_run_at, running, failure_count
+                 FROM cron_jobs
+                 WHERE enabled = 1 AND running = 0
+                   AND next_run_at_epoch IS NOT NULL
+                   AND next_run_at_epoch <= ?1
+                 ORDER BY next_run_at_epoch ASC
+                 LIMIT ?2",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to prepare due cron query: {e}")))?;
+        let rows = stmt
+            .query_map(params![now_epoch, limit], row_to_cron_job)
+            .map_err(|e| CoreError::Session(format!("Failed to query due cron jobs: {e}")))?;
+        collect_rows(rows, "cron job")
+    }
+
+    pub fn start_cron_run(&self, job_id: &str) -> Result<CronRun, CoreError> {
+        let Some(job) = self.get_cron_job(job_id)? else {
+            return Err(CoreError::Session(format!("Cron job not found: {job_id}")));
+        };
+        if job.running {
+            return Err(CoreError::Session(format!(
+                "Cron job already running: {job_id}"
+            )));
+        }
+
+        let now_epoch = unix_now();
+        let started_at = chrono_from_unix_secs(now_epoch);
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE cron_jobs
+                 SET running = 1, next_run_at = NULL, next_run_at_epoch = NULL
+                 WHERE id = ?1 AND running = 0",
+                params![job_id],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to mark cron job running: {e}")))?;
+        if changed == 0 {
+            return Err(CoreError::Session(format!(
+                "Cron job already running: {job_id}"
+            )));
+        }
+
+        self.conn
+            .execute(
+                "INSERT INTO cron_runs (job_id, started_at, status)
+                 VALUES (?1, ?2, 'running')",
+                params![job_id, started_at],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to create cron run: {e}")))?;
+        let run_id = self.conn.last_insert_rowid();
+        self.get_cron_run(run_id)?
+            .ok_or_else(|| CoreError::Session("created cron run not found".to_string()))
+    }
+
+    pub fn finish_cron_run(
+        &self,
+        run_id: i64,
+        job: &CronJob,
+        finish: CronRunFinish,
+    ) -> Result<CronRun, CoreError> {
+        let now_epoch = unix_now();
+        let finished_at = chrono_from_unix_secs(now_epoch);
+        let next_epoch = if job.enabled {
+            Some(next_run_epoch(&job.schedule, now_epoch)?)
+        } else {
+            None
+        };
+        let next_run_at = next_epoch.map(chrono_from_unix_secs);
+        let failed = finish.status != "succeeded";
+
+        self.conn
+            .execute(
+                "UPDATE cron_runs
+                 SET finished_at = ?1, status = ?2, output = ?3, error = ?4,
+                     prompt_tokens = ?5, completion_tokens = ?6, total_tokens = ?7,
+                     duration_ms = ?8, session_id = ?9
+                 WHERE id = ?10",
+                params![
+                    finished_at,
+                    finish.status,
+                    finish.output,
+                    finish.error,
+                    finish.prompt_tokens,
+                    finish.completion_tokens,
+                    finish.total_tokens,
+                    finish.duration_ms,
+                    finish.session_id,
+                    run_id,
+                ],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to finish cron run: {e}")))?;
+
+        self.conn
+            .execute(
+                "UPDATE cron_jobs
+                 SET running = 0, last_run_at = ?1, next_run_at = ?2,
+                     next_run_at_epoch = ?3,
+                     failure_count = CASE WHEN ?4 THEN failure_count + 1 ELSE 0 END
+                 WHERE id = ?5",
+                params![finished_at, next_run_at, next_epoch, failed, job.id],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to update cron job after run: {e}")))?;
+
+        self.get_cron_run(run_id)?
+            .ok_or_else(|| CoreError::Session(format!("Cron run not found: {run_id}")))
+    }
+
+    pub fn list_cron_runs(&self, job_id: &str, limit: u32) -> Result<Vec<CronRun>, CoreError> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, job_id, started_at, finished_at, status, output, error,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        duration_ms, session_id
+                 FROM cron_runs
+                 WHERE job_id = ?1
+                 ORDER BY id DESC
+                 LIMIT ?2",
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to prepare cron run list: {e}")))?;
+        let rows = stmt
+            .query_map(params![job_id, limit], row_to_cron_run)
+            .map_err(|e| CoreError::Session(format!("Failed to list cron runs: {e}")))?;
+        collect_rows(rows, "cron run")
+    }
+
+    pub fn get_cron_run(&self, id: i64) -> Result<Option<CronRun>, CoreError> {
+        self.conn
+            .query_row(
+                "SELECT id, job_id, started_at, finished_at, status, output, error,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        duration_ms, session_id
+                 FROM cron_runs WHERE id = ?1",
+                params![id],
+                row_to_cron_run,
+            )
+            .optional()
+            .map_err(|e| CoreError::Session(format!("Failed to get cron run: {e}")))
+    }
+
+    pub fn reset_stale_cron_running_flags(&self) -> Result<(), CoreError> {
+        self.conn
+            .execute("UPDATE cron_jobs SET running = 0 WHERE running = 1", [])
+            .map_err(|e| CoreError::Session(format!("Failed to reset cron running flags: {e}")))?;
+        self.conn
+            .execute(
+                "UPDATE cron_runs
+                 SET status = 'failed', finished_at = ?1, error = 'server restarted before run completed'
+                 WHERE status = 'running'",
+                params![chrono_now()],
+            )
+            .map_err(|e| CoreError::Session(format!("Failed to close stale cron runs: {e}")))?;
+
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, schedule FROM cron_jobs
+                 WHERE enabled = 1 AND running = 0 AND next_run_at_epoch IS NULL",
+            )
+            .map_err(|e| {
+                CoreError::Session(format!("Failed to prepare stale cron reschedule: {e}"))
+            })?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(|e| CoreError::Session(format!("Failed to query stale cron jobs: {e}")))?;
+        let pairs = collect_rows(rows, "cron job schedule")?;
+        drop(stmt);
+
+        let now = unix_now();
+        for (id, schedule) in pairs {
+            let next_epoch = next_run_epoch(&schedule, now)?;
+            let next_run_at = chrono_from_unix_secs(next_epoch);
+            self.conn
+                .execute(
+                    "UPDATE cron_jobs
+                     SET next_run_at = ?1, next_run_at_epoch = ?2
+                     WHERE id = ?3",
+                    params![next_run_at, next_epoch, id],
+                )
+                .map_err(|e| CoreError::Session(format!("Failed to reschedule cron job: {e}")))?;
+        }
+        Ok(())
+    }
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+
+fn collect_rows<T>(
+    rows: impl Iterator<Item = SqlResult<T>>,
+    label: &str,
+) -> Result<Vec<T>, CoreError> {
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row.map_err(|e| CoreError::Session(format!("Failed to read {label}: {e}")))?);
+    }
+    Ok(items)
+}
 
 fn row_to_session(row: &rusqlite::Row<'_>) -> SqlResult<Session> {
     Ok(Session {
@@ -510,16 +933,61 @@ fn row_to_message(row: &rusqlite::Row<'_>) -> SqlResult<SessionMessage> {
     })
 }
 
+fn row_to_cron_job(row: &rusqlite::Row<'_>) -> SqlResult<CronJob> {
+    let disabled_json: String = row.get(6)?;
+    let disabled_toolsets = serde_json::from_str(&disabled_json).unwrap_or_default();
+    Ok(CronJob {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        prompt: row.get(2)?,
+        schedule: row.get(3)?,
+        enabled: row.get::<_, i64>(4)? != 0,
+        model: row.get(5)?,
+        disabled_toolsets,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
+        next_run_at: row.get(9)?,
+        next_run_at_epoch: row.get(10)?,
+        last_run_at: row.get(11)?,
+        running: row.get::<_, i64>(12)? != 0,
+        failure_count: row.get(13)?,
+    })
+}
+
+fn row_to_cron_run(row: &rusqlite::Row<'_>) -> SqlResult<CronRun> {
+    Ok(CronRun {
+        id: row.get(0)?,
+        job_id: row.get(1)?,
+        started_at: row.get(2)?,
+        finished_at: row.get(3)?,
+        status: row.get(4)?,
+        output: row.get(5)?,
+        error: row.get(6)?,
+        prompt_tokens: row.get(7)?,
+        completion_tokens: row.get(8)?,
+        total_tokens: row.get(9)?,
+        duration_ms: row.get(10)?,
+        session_id: row.get(11)?,
+    })
+}
+
 /// Returns the current UTC time as an ISO 8601 string without external deps.
-pub(crate) fn chrono_now() -> String {
-    // Use std::time for a simple UTC timestamp.
+pub fn chrono_now() -> String {
+    chrono_from_unix_secs(unix_now())
+}
+
+pub fn unix_now() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
+        .as_secs() as i64
+}
+
+/// Format a Unix epoch seconds value as ISO 8601 UTC without external deps.
+pub fn chrono_from_unix_secs(secs: i64) -> String {
     // Format as ISO 8601: YYYY-MM-DDTHH:MM:SSZ
-    let s = secs;
+    let s = secs.max(0) as u64;
     let sec = s % 60;
     let min = (s / 60) % 60;
     let hour = (s / 3600) % 24;

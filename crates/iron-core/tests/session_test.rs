@@ -1,3 +1,4 @@
+use iron_core::cron::{CronJobPatch, CronRunFinish, NewCronJob};
 use iron_core::session::{Session, SessionMessage, SessionStore, TokenUsage};
 
 fn make_session(id: &str, model: &str, started_at: &str) -> Session {
@@ -257,6 +258,70 @@ fn test_session_with_parent() {
 
     assert_eq!(retrieved_parent.id, "parent-001");
     assert!(retrieved_parent.parent_session_id.is_none());
+}
+
+#[test]
+fn test_cron_job_lifecycle_and_runs() {
+    let store = SessionStore::new_in_memory().expect("in-memory store");
+
+    let job = store
+        .create_cron_job(NewCronJob {
+            name: "report".to_string(),
+            prompt: "Summarize recent sessions".to_string(),
+            schedule: "every 5m".to_string(),
+            enabled: true,
+            model: Some("test-model".to_string()),
+            disabled_toolsets: vec!["terminal".to_string()],
+        })
+        .expect("create cron job");
+
+    assert_eq!(job.name, "report");
+    assert!(job.enabled);
+    assert!(job.next_run_at_epoch.is_some());
+    assert_eq!(job.disabled_toolsets, vec!["terminal"]);
+
+    let updated = store
+        .update_cron_job(
+            &job.id,
+            CronJobPatch {
+                schedule: Some("every 10m".to_string()),
+                enabled: Some(false),
+                ..CronJobPatch::default()
+            },
+        )
+        .expect("update cron job");
+    assert!(!updated.enabled);
+    assert!(updated.next_run_at_epoch.is_none());
+
+    let run = store.start_cron_run(&job.id).expect("start cron run");
+    let running = store
+        .get_cron_job(&job.id)
+        .expect("get cron job")
+        .expect("job exists");
+    assert!(running.running);
+
+    let finished = store
+        .finish_cron_run(
+            run.id,
+            &running,
+            CronRunFinish {
+                status: "succeeded".to_string(),
+                output: Some("done".to_string()),
+                error: None,
+                prompt_tokens: 10,
+                completion_tokens: 5,
+                total_tokens: 15,
+                duration_ms: 123,
+                session_id: Some("cron-session".to_string()),
+            },
+        )
+        .expect("finish cron run");
+    assert_eq!(finished.status, "succeeded");
+    assert_eq!(finished.output.as_deref(), Some("done"));
+
+    let runs = store.list_cron_runs(&job.id, 10).expect("list cron runs");
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].total_tokens, 15);
 }
 
 // ─── FTS5 search tests ───

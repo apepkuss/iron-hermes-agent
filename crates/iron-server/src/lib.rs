@@ -1,4 +1,5 @@
 pub mod config;
+pub mod cron_runner;
 pub mod routes;
 pub mod state;
 
@@ -12,6 +13,7 @@ use tokio::net::TcpListener;
 use crate::config::IronConfig;
 use crate::routes::chat::chat_completions;
 use crate::routes::config_api::{get_config, list_toolsets, update_config};
+use crate::routes::cron::{create_job, delete_job, list_jobs, list_runs, run_job_now, update_job};
 use crate::routes::health::health;
 use crate::routes::models::{list_models, list_provider_models};
 use crate::routes::models_status::models_status;
@@ -39,6 +41,13 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route("/v1/chat/completions", post(chat_completions))
         .route("/api/config", get(get_config).post(update_config))
         .route("/api/toolsets", get(list_toolsets))
+        .route("/api/cron/jobs", get(list_jobs).post(create_job))
+        .route(
+            "/api/cron/jobs/{id}",
+            axum::routing::patch(update_job).delete(delete_job),
+        )
+        .route("/api/cron/jobs/{id}/run", post(run_job_now))
+        .route("/api/cron/jobs/{id}/runs", get(list_runs))
         .route("/api/models/status", get(models_status))
         .route("/api/session/reset", post(reset_session))
         .route("/api/sessions/search", get(search_sessions))
